@@ -451,12 +451,14 @@ function showItem(i) {
 function auto() { if (REVIEW) return; clearTimeout(autoT); autoT = setTimeout(() => step(1), 1500); }
 // 换桌子：像摄影机一样，从这张桌子横着飘出去（比同一张桌子里换物件快一点），新的一张从另一边飘进来
 const GLIDE = { side: 1.7, az: 16, polar: 5, zoom: 0.78, out: 1150, in: 1700 };
+// 飘多远按"画面横着能看到多宽"来定：手机竖屏看到的宽度窄，同样的距离会显得一下子甩过去，所以按比例缩，和电脑上看起来一样
+const sideAmt = () => GLIDE.side * Math.min(1, ((camera.right - camera.left) / 2) / (H * 1.6));
 const sideVec = (az, d) => new THREE.Vector3(Math.cos(D2R(az)), 0, -Math.sin(D2R(az))).multiplyScalar(d);
 function leave(url, dir) {
   clearTimeout(autoT); moving = true; col.classList.add('out'); hotFx.set([]); readView(); unlimit(); controls.enabled = false;
   const f = { target: view.target.clone(), polar: view.polar, az: view.az, zoom: view.zoom };
   camAnim = { t0: performance.now(), dur: GLIDE.out, shot: ITEMS[idx].shot, glide: true, curve: 'in', from: f,
-              to: { target: f.target.clone().add(sideVec(f.az, GLIDE.side * dir)), polar: f.polar - GLIDE.polar, az: f.az + GLIDE.az * dir, zoom: f.zoom * GLIDE.zoom } };
+              to: { target: f.target.clone().add(sideVec(f.az, sideAmt() * dir)), polar: f.polar - GLIDE.polar, az: f.az + GLIDE.az * dir, zoom: f.zoom * GLIDE.zoom } };
   try { sessionStorage.setItem('tw_glide', String(dir)); sessionStorage.removeItem('tw_veil'); } catch (e) {}
   setTimeout(() => { location.href = url; }, GLIDE.out - 80);
 }
@@ -487,7 +489,7 @@ if (document.fonts) document.fonts.ready.then(heatSoon); setTimeout(heatSoon, 12
 { let g = 0; try { g = +sessionStorage.getItem('tw_glide') || 0; sessionStorage.removeItem('tw_glide'); } catch (e) {}
   if (g && !STILL) {
     const s0 = SHOTS[START]; col.classList.add('out'); controls.enabled = false; unlimit();
-    const from = { target: new THREE.Vector3(...s0.target).sub(sideVec(s0.az, GLIDE.side * g)), polar: s0.polar - GLIDE.polar, az: s0.az - GLIDE.az * g, zoom: s0.zoom * GLIDE.zoom };
+    const from = { target: new THREE.Vector3(...s0.target).sub(sideVec(s0.az, sideAmt() * g)), polar: s0.polar - GLIDE.polar, az: s0.az - GLIDE.az * g, zoom: s0.zoom * GLIDE.zoom };
     view.target.copy(from.target); view.polar = from.polar; view.az = from.az; view.zoom = from.zoom; applyView();
     const go2 = () => { if (!window.__ready) return setTimeout(go2, 60);
       camAnim = { t0: performance.now() + 120, dur: GLIDE.in, shot: START, glide: true, curve: 'out', from, to: { target: new THREE.Vector3(...s0.target), polar: s0.polar, az: s0.az, zoom: s0.zoom } };

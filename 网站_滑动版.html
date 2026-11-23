@@ -86,6 +86,8 @@ const wrap = document.getElementById('wrap'), pull = document.getElementById('pu
 
 // 到了附近才加载
 const frames = [...document.querySelectorAll('iframe[data-src]')];
+// 每次发布换一个版本号：各页地址带上它，手机就不会继续用缓存里的旧页面
+const BUILD = '20261123d'; frames.forEach(f => { f.dataset.src += (f.dataset.src.includes('?') ? '&' : '?') + 'v=' + BUILD; });
 const secs = [...document.querySelectorAll('#wrap > section')];
 const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting && !e.target.src) e.target.src = e.target.dataset.src; }), { rootMargin: '60% 0px' });
 frames.forEach(f => io.observe(f));

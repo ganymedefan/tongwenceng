@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>The Gap</title>
+<title>Between Heart and Mouth</title>
 <link rel="icon" href="./favicon.svg"><link rel="stylesheet" href="./css/zh.css"><script src="./js/lang.js"></script><script src="./js/grd.js"></script>
 <script type="importmap">{ "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/" } }</script>
 <!--
@@ -63,10 +63,10 @@ import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 
 // ───── 文字 ─────
 document.getElementById('nav').innerHTML = `<a href="./关于_情绪劳动.html">${L('关于', 'About')}</a><a href="./数据_九十三种温度.html">${L('数据', 'Data')}</a><a href="./办公桌_新布景_轮廓.html">${L('问卷', 'Survey')}</a><a href="./热像镜子.html">${L('互动', 'Interact')}</a><a class="on">${L('其他', 'Other')}</a>`;
-document.getElementById('h1').textContent = L('温差', 'The Gap');
+document.getElementById('h1').textContent = L('心口之间', 'Between Heart and Mouth');
 document.getElementById('lp').textContent = L('同一件小事，换一个人面对，说出口的和心里的，就隔开了不同的距离。', 'The same small moment, faced with someone else — and the distance between what is felt and what is said shifts.');
 
-document.title = L('温差', 'The Gap');
+document.title = L('心口之间', 'Between Heart and Mouth');
 
 // ───── 数据：每格平均分、深层占比 ─────
 const DATA = await (await fetch('./data/答卷_去标识.json')).json();

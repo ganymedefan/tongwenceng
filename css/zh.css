@@ -11,3 +11,6 @@
 html { -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
 body { -webkit-user-select: none; user-select: none; }
 img { -webkit-user-drag: none; }
+
+/* 在滑动站里（外层有统一的顶部导航）：各页自己的 logo 和导航不再重复出现 */
+html.inframe body > header, html.inframe a.logo, html.inframe nav#nav, html.inframe a.mark { display: none !important; }

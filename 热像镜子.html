@@ -402,7 +402,7 @@ function frame() {
   open += (openGoal - open) * 0.035; const eo = open * open * (3 - 2 * open);
   U.uOpen.value = eo; numEl.style.opacity = Math.max(0, (eo - 0.55) / 0.45).toFixed(3);
   U.uLum.value = rtS.texture; U.uHeat.value = b.texture; U.uT.value = t;
-  passColor.render(renderer);
+  passColor.render(renderer); TW_topInk(renderer.getContext());
   const now = performance.now(), el = usingCam ? video : demoVid;
   if (now - lastDet > 66) { lastDet = now; try { detect(el, now); } catch (e) {} }   // 一秒识别 15 次
   drawOverlay(now);

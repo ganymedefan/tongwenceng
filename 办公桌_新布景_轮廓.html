@@ -449,19 +449,22 @@ function showItem(i) {
 }
 // 答完这一题：停一下让颜色晕开，再自动去下一题
 function auto() { if (REVIEW) return; clearTimeout(autoT); autoT = setTimeout(() => step(1), 1500); }
-// 换桌子：用下一张桌子那一台的颜色晕一层，盖住了再换页
-function leave(url, stage) {
-  const c = (t, a) => `rgba(${TW_grdAt(stage, t).map(Math.round)},${a})`;
-  const bg = `radial-gradient(70% 60% at 28% 38%, ${c(0.92, 0.95)}, ${c(0.92, 0)} 70%), radial-gradient(60% 70% at 74% 66%, ${c(0.45, 0.85)}, ${c(0.45, 0)} 70%), radial-gradient(80% 80% at 50% 50%, ${c(0.05, 0.9)}, ${c(0.05, 0.6)})`;
-  try { sessionStorage.setItem('tw_veil', bg); } catch (e) {}
-  const v = $('veil'); v.style.background = bg; v.classList.add('on'); clearTimeout(autoT); moving = true;
-  setTimeout(() => { location.href = url; }, 950);
+// 换桌子：像摄影机一样，从这张桌子横着飘出去（比同一张桌子里换物件快一点），新的一张从另一边飘进来
+const GLIDE = { side: 1.7, az: 16, polar: 5, zoom: 0.78, out: 1150, in: 1700 };
+const sideVec = (az, d) => new THREE.Vector3(Math.cos(D2R(az)), 0, -Math.sin(D2R(az))).multiplyScalar(d);
+function leave(url, dir) {
+  clearTimeout(autoT); moving = true; col.classList.add('out'); hotFx.set([]); readView(); unlimit(); controls.enabled = false;
+  const f = { target: view.target.clone(), polar: view.polar, az: view.az, zoom: view.zoom };
+  camAnim = { t0: performance.now(), dur: GLIDE.out, shot: ITEMS[idx].shot, glide: true, curve: 'in', from: f,
+              to: { target: f.target.clone().add(sideVec(f.az, GLIDE.side * dir)), polar: f.polar - GLIDE.polar, az: f.az + GLIDE.az * dir, zoom: f.zoom * GLIDE.zoom } };
+  try { sessionStorage.setItem('tw_glide', String(dir)); sessionStorage.removeItem('tw_veil'); } catch (e) {}
+  setTimeout(() => { location.href = url; }, GLIDE.out - 80);
 }
 function step(d) {
   clearTimeout(autoT); if (moving) return;
   const j = idx + d;
-  if (j >= ITEMS.length) { leave('./' + NEXT_PAGE, ['mid', 'back', 'front'][+STG - 1]); return; }   // 这张桌子答完：去下一张（最后一张去看自己的温度）
-  if (j < 0) { if (PREV_PAGE) leave(`./${PREV_PAGE}?shot=${ITEMS[ITEMS.length - 1].shot}`, ['front', 'front', 'mid'][+STG - 1]); return; }
+  if (j >= ITEMS.length) { leave('./' + NEXT_PAGE, 1); return; }   // 这张桌子答完：去下一张（最后一张去看自己的温度）
+  if (j < 0) { if (PREV_PAGE) leave(`./${PREV_PAGE}?shot=${ITEMS[ITEMS.length - 1].shot}`, -1); return; }
   moving = true; pulse(ITEMS[idx].shot); idx = j;
   col.classList.add('out'); hotFx.set([]);
   setTimeout(() => { showItem(idx); col.classList.remove('out'); moving = false; heatSoon(); }, 900);
@@ -480,7 +483,18 @@ if (Q.has('cam')) document.body.classList.add('camtool');   // 调镜头的工�
 const START = Q.get('shot') || 'A'; idx = Math.max(0, ITEMS.findIndex(it => it.shot === START));
 showItem(idx); toShot(START);
 if (document.fonts) document.fonts.ready.then(heatSoon); setTimeout(heatSoon, 1200);
-// 从上一张桌子过来的：画面出来了再把那层色慢慢褪开
+// 从上一张桌子飘过来的：先把镜头放在另一边，模型到了再飘进这一题的镜头；题目等镜头到了再出来
+{ let g = 0; try { g = +sessionStorage.getItem('tw_glide') || 0; sessionStorage.removeItem('tw_glide'); } catch (e) {}
+  if (g && !STILL) {
+    const s0 = SHOTS[START]; col.classList.add('out'); controls.enabled = false; unlimit();
+    const from = { target: new THREE.Vector3(...s0.target).sub(sideVec(s0.az, GLIDE.side * g)), polar: s0.polar - GLIDE.polar, az: s0.az - GLIDE.az * g, zoom: s0.zoom * GLIDE.zoom };
+    view.target.copy(from.target); view.polar = from.polar; view.az = from.az; view.zoom = from.zoom; applyView();
+    const go2 = () => { if (!window.__ready) return setTimeout(go2, 60);
+      camAnim = { t0: performance.now() + 120, dur: GLIDE.in, shot: START, glide: true, curve: 'out', from, to: { target: new THREE.Vector3(...s0.target), polar: s0.polar, az: s0.az, zoom: s0.zoom } };
+      setTimeout(() => { col.classList.remove('out'); heatSoon(); }, GLIDE.in - 300); };
+    go2();
+  } }
+// （旧的换桌颜色过渡，已不用）
 if (document.documentElement.classList.contains('veiled')) setTimeout(() => { document.documentElement.classList.remove('veiled'); $('veil').style.transition = 'opacity 1.4s cubic-bezier(.4,0,.2,1)'; try { sessionStorage.removeItem('tw_veil'); } catch (e) {} }, 450);   // 字体到了再画一次（打开时就有答过的选项）
 if (REVIEW) {   // 回顾：把当时选的标出来，热痕照当时的分数；不能改
   next.classList.add('on'); next.textContent = L('回到我的温度', 'Back to my temperature'); next.onclick = () => { location.href = './热像镜子.html?open'; };
@@ -508,9 +522,9 @@ renderer.setAnimationLoop(t => {
   if (pulseAnim) { const k = Math.min(1, (now - pulseAnim.t0) / pulseAnim.dur); pulseAnim.m.uniforms.uPulse.value = Math.sin(Math.PI * k) * 1.4;
     if (k >= 1) { pulseAnim.m.uniforms.uPulse.value = 0; pulseAnim = null; } }
   if (camAnim && now >= camAnim.t0) {
-    const k = Math.min(1, (now - camAnim.t0) / camAnim.dur), e = ease(k), f = camAnim.from, to = camAnim.to;
+    const k = Math.min(1, (now - camAnim.t0) / camAnim.dur), e = camAnim.curve === 'in' ? k * k * k : camAnim.curve === 'out' ? 1 - Math.pow(1 - k, 3) : ease(k), f = camAnim.from, to = camAnim.to;   // 出去越飘越快，进来越飘越慢，接起来是一整段
     view.target.lerpVectors(f.target, to.target, e); view.polar = f.polar + (to.polar - f.polar) * e; view.az = f.az + (to.az - f.az) * e;
-    view.zoom = (f.zoom + (to.zoom - f.zoom) * e) * (1 - 0.18 * Math.sin(Math.PI * e));   // 中途稍微拉远一点，像镜头退后再推进
+    view.zoom = (f.zoom + (to.zoom - f.zoom) * e) * (camAnim.glide ? 1 : 1 - 0.18 * Math.sin(Math.PI * e));   // 中途稍微拉远一点，像镜头退后再推进
     applyView(); if (k >= 1) { limit(camAnim.shot); camAnim = null; controls.enabled = true; }
   }
   FOCUS.value.copy(view.target); TIME.value = t / 1000;
@@ -519,7 +533,7 @@ renderer.setAnimationLoop(t => {
   if (!camAnim) controls.update();
   renderer.setClearColor(0x000000, 0); renderer.setRenderTarget(rtS); renderer.clear(); renderer.render(scene, camera);
   blur(rtS, rtN, 4); blur(rtS, rtF, 40); blur(rtS, rtW, 150);   // A2 样张：近处模糊 8→4   // 弥散比第一版大（第一版 6 / 26 / 90）
-  renderer.setRenderTarget(null); finalQuad.render(renderer);
+  renderer.setRenderTarget(null); finalQuad.render(renderer); TW_topInk(renderer.getContext());
 });
 </script>
 </body></html>

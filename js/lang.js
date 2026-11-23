@@ -16,6 +16,7 @@
       location.replace('./网站_滑动版.html?p=' + encodeURIComponent(me + (q ? '?' + q : ''))); }
   }
   window.TW_IN_FRAME = inFrame;
+  if (inFrame) document.documentElement.classList.add('inframe');   // 在滑动站里：logo 和导航由外层统一给，各页自己的藏起来
   window.setLang = v => { try { localStorage.setItem('tw_lang', v); } catch (e) {}
     if (inFrame) { window.parent.postMessage({ tw: 'lang', v }, '*'); return; }
     const u = new URL(location.href); u.searchParams.set('lang', v); location.href = u.toString(); };
@@ -49,12 +50,21 @@
     }, { passive: false });
     addEventListener('touchend', () => { if (ty == null) return; ty = null;
       if (Math.abs(vy) > 0.25 && performance.now() - lt < 120) window.parent.postMessage({ tw: 'wheel', dy: vy * 260, fling: true }, '*'); }, { passive: true });
+    // 鼠标移到屏幕最上面一条：告诉外层（把导航叫出来）
+    let lastNear = 0; addEventListener('mousemove', e => { if (e.clientY < 70 && performance.now() - lastNear > 300) { lastNear = performance.now(); window.parent.postMessage({ tw: 'near-top' }, '*'); } }, { passive: true });
     addEventListener('keydown', e => { if (['PageDown', 'PageUp'].includes(e.key)) window.parent.postMessage({ tw: 'wheel', dy: e.key === 'PageDown' ? 200 : -200 }, '*'); });
     // 站内链接：交给外层（外层知道是哪一屏就翻过去，不知道就整页跳）
     addEventListener('click', e => { if (e.defaultPrevented) return; const a = e.target.closest && e.target.closest('a[href]'); if (!a) return;
       const href = a.getAttribute('href'); if (!href || href.startsWith('#') || /^https?:/.test(href)) return;
       e.preventDefault(); window.parent.postMessage({ tw: 'go', href }, '*'); });
   }
+  // 页面最上面一条（外层导航压着的地方）是深是浅：深就让导航用白字，浅就用黑字。各页在自己的 WebGL 画完一帧后调用。
+  window.TW_topInk = (() => { let cur = null, lastT = 0; const px = new Uint8Array(4);
+    return gl => { const now = performance.now(); if (!inFrame || now - lastT < 450) return; lastT = now;
+      const W = gl.drawingBufferWidth, H = gl.drawingBufferHeight, d = W / innerWidth; let s = 0, n = 0;
+      for (let a = 0.03; a < 0.98; a += 0.1) for (const y of [22, 46]) { gl.readPixels(Math.round(a * W), Math.round(H - y * d), 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px); s += (0.3 * px[0] + 0.59 * px[1] + 0.11 * px[2]) / 255; n++; }
+      const L = s / n, k = L < 0.5 ? 'light' : L > 0.58 ? 'dark' : (cur || 'dark');
+      if (k !== cur) { cur = k; window.parent.postMessage({ tw: 'ink', v: k }, '*'); } }; })();
   document.documentElement.lang = l === 'en' ? 'en' : 'zh-CN';
   document.documentElement.classList.add('lang-' + l);
 })();

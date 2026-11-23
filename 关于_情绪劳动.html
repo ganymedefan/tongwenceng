@@ -73,13 +73,13 @@ body, nav a, .rule { transition: color .8s, background-color .8s; }
     <div class="l">Emotional labour</div>
     <div class="r"><p>Facing a supervisor, a peer, or someone close, we tune what we show to what each relationship expects.</p>
       <p>Where little is spent, the image stays cool and dark; where much is spent, it runs hot and bright.</p>
-      <a href="./数据_九十三种温度.html">The Gap ↗</a></div>
+      <a href="./数据_九十三种温度.html">Between Heart and Mouth ↗</a></div>
   </div>
   <div class="cols zh">
     <div class="l">情绪劳动</div>
     <div class="r"><p>面对上级、同辈与亲近者，人们依照不同关系的期待调整情绪表达。</p>
       <p>付出少的地方沉暗，付出多的地方热亮。</p>
-      <a href="./数据_九十三种温度.html">温差 ↗</a></div>
+      <a href="./数据_九十三种温度.html">心口之间 ↗</a></div>
   </div>
 </main>
 
@@ -170,7 +170,7 @@ const clock = new THREE.Clock(); let last = 0, held = performance.now(), lastRea
   const t = clock.getElapsedTime(), dt = Math.min(0.05, t - last); last = t;
   if (performance.now() - held > 14000) { held = performance.now(); target = (target + 1) % 3; }
   const g = ramp(PALS[target]); U.uC.value.forEach((c, i) => c.lerp(g[i], Math.min(1, dt * 0.5)));
-  U.uT.value = t; quad.render(renderer);
+  U.uT.value = t; quad.render(renderer); TW_topInk(gl);
   if (t - lastRead > 0.4) { lastRead = t; readInk(); }
   requestAnimationFrame(frame);
 })();

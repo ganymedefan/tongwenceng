@@ -14,14 +14,18 @@
 <style>
 @font-face { font-family: "Exposure"; src: url("./fonts/Exposure-m20.otf") format("opentype"); font-display: swap; }
 * { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; overscroll-behavior: none; }
 html { background: #fff; }
 body { font-family: "Exposure", Georgia, serif; color: #1b181d; -webkit-font-smoothing: antialiased; }
-#wrap { will-change: transform; }
-.sec { height: 100vh; position: relative; overflow: hidden; }
+/* 外层不用浏览器自己的滚动：整条页面是一个固定的长条，由脚本移动它（不会和阻尼互相拉扯而抖） */
+#wrap { position: fixed; left: 0; right: 0; top: 0; will-change: transform; }
+.sec { height: var(--h, 100vh); position: relative; overflow: hidden; }
 .sec iframe { display: block; width: 100%; height: 100%; border: 0; background: #fff; }
 
 /* 下拉提醒：滚到数据页底下再往下拉才出现 */
-#wash { position: fixed; left: 0; right: 0; height: 60vh; z-index: 4; pointer-events: none; opacity: 0; filter: blur(18px); }
+#wash { position: fixed; left: 0; right: 0; height: 34vh; z-index: 4; pointer-events: none; opacity: 0;
+  -webkit-backdrop-filter: blur(26px) saturate(1.05); backdrop-filter: blur(26px) saturate(1.05);
+  -webkit-mask-image: linear-gradient(transparent, #000 38%, #000 62%, transparent); mask-image: linear-gradient(transparent, #000 38%, #000 62%, transparent); }
 .pull { position: fixed; left: 50%; bottom: 22px; z-index: 6; transform: translate(-50%, 16px); opacity: 0; pointer-events: none; text-align: center;
   font-size: 13.5px; letter-spacing: .04em; transition: opacity .25s, transform .3s; }
 .pull.on { opacity: 1; transform: translate(-50%, 0); }
@@ -29,6 +33,21 @@ body { font-family: "Exposure", Georgia, serif; color: #1b181d; -webkit-font-smo
 .pull .bar { display: block; width: 120px; height: 2px; margin: 10px auto 0; background: rgba(27,24,29,.12); border-radius: 2px; overflow: hidden; }
 .pull .bar i { display: block; height: 100%; width: 0; background: #1b181d; }
 .lang-zh .pull { font-weight: 330; letter-spacing: .12em; }
+
+/* 顶部导航：从第二屏开始，滑动时出现、停下一会儿就淡出；各页自己的 logo 和导航在滑动站里都藏了 */
+#bar { position: fixed; left: 0; right: 0; top: 0; z-index: 8; display: flex; justify-content: space-between; align-items: center;
+  padding: 14px clamp(18px, 2.4vw, 36px) 26px; background: linear-gradient(rgba(255,255,255,.82), rgba(255,255,255,.5) 60%, rgba(255,255,255,0));
+  opacity: 0; transform: translateY(-14px); pointer-events: none; transition: opacity .5s ease, transform .6s cubic-bezier(.2,.7,.2,1); }
+#bar.on { opacity: 1; transform: none; pointer-events: auto; }
+#bar .lg { width: clamp(96px, 8vw, 128px); display: block; cursor: pointer; } #bar .lg img { width: 100%; display: block; }
+#bar nav { display: flex; gap: clamp(14px, 1.8vw, 26px); align-items: baseline; font-size: 14px; }
+#bar nav a { color: rgba(27,24,29,.5); cursor: pointer; text-decoration: none; transition: color .3s; }
+#bar nav a:hover, #bar nav a.on { color: #1b181d; }
+#bar.light { background: linear-gradient(rgba(0,0,0,.14), rgba(0,0,0,0)); }
+#bar.light nav a { color: rgba(255,255,255,.72); } #bar.light nav a:hover, #bar.light nav a.on { color: #fff; }
+#bar nav .lang { margin-left: clamp(6px, 1vw, 14px); font-size: 12.5px; }
+.lang-zh #bar nav { font-family: var(--zh); font-weight: 330; letter-spacing: .08em; }
+@media (max-width: 560px) { #bar nav { gap: 12px; font-size: 13px; } #bar nav .lang { display: none; } }
 </style>
 </head>
 <body>
@@ -39,16 +58,30 @@ body { font-family: "Exposure", Georgia, serif; color: #1b181d; -webkit-font-smo
   <section class="sec later" id="survey"><iframe data-src="./办公桌_新布景_轮廓.html" title="Survey"></iframe></section>
   <section class="sec later"><iframe data-src="./热像镜子.html" title="Interact" allow="camera"></iframe></section>
 </div>
+<header id="bar"><a class="lg" data-i="0"><img id="lgImg" src="./logo/logo_彩虹.png" alt="In the Stratospheric Realm"></a>
+  <nav><a data-i="1"></a><a data-i="2"></a><a data-i="3"></a><a data-i="4"></a><a class="lang" id="langA"></a></nav></header>
 <div id="wash"></div>
 <div class="pull" id="pull"><span class="arr">↓</span><span id="pt"></span><span class="bar"><i id="pb"></i></span></div>
 
 <script>
-if ('scrollRestoration' in history) history.scrollRestoration = 'manual';   // 每次都从该在的那一屏开始，不接着上次的位置
 document.getElementById('pt').textContent = L('下拉进入问卷', 'Pull to enter the survey');
 // 每个交界用哪条渐变：首页→关于 前台；关于→数据 后台；数据→问卷 中台；问卷→互动 前台
 const SEAM = [null, 'front', 'back', 'mid', 'front'], wash = document.getElementById('wash'); let washI = -1;
 function washTo(i) { if (i === washI) return; washI = i; const n = SEAM[i], c = t => `rgba(${TW_grdAt(n, t).map(Math.round)},`;
   wash.style.background = `linear-gradient(to bottom, ${c(0.05)}0) 0%, ${c(0.2)}.55) 28%, ${c(0.75)}.85) 50%, ${c(0.95)}.55) 72%, ${c(1)}0) 100%)`; }
+// ───── 顶部导航 ─────
+const bar = document.getElementById('bar'), barLinks = [...bar.querySelectorAll('[data-i]')];
+[L('关于', 'About'), L('数据', 'Data'), L('问卷', 'Survey'), L('互动', 'Interact')].forEach((t, i) => { bar.querySelectorAll('nav [data-i]')[i].textContent = t; });
+{ const la = document.getElementById('langA'); la.textContent = TW_LANG === 'en' ? '中文' : 'English'; la.onclick = () => { try { localStorage.setItem('tw_lang', TW_LANG === 'en' ? 'zh' : 'en'); } catch (e) {} location.reload(); }; }
+let barSeen = -1e9, barHover = false;
+const poke = () => { barSeen = performance.now(); };
+barLinks.forEach(a => a.onclick = () => { const i = +a.dataset.i, f = secs[i].querySelector('iframe'); if (!f.getAttribute('src')) f.src = f.dataset.src; if (i >= 3) armed = false; goTo(secs[i].offsetTop); poke(); });
+bar.addEventListener('pointerenter', () => { barHover = true; }); bar.addEventListener('pointerleave', () => { barHover = false; poke(); });
+addEventListener('message', e => { if (e.data && e.data.tw === 'near-top') poke(); });
+// 各页报上来的：自己最上面那一条是深还是浅（深 = 导航用白字和白字 logo）
+const inkBy = ['dark', 'dark', 'dark', 'dark', 'dark'], lgImg = document.getElementById('lgImg'); let barInk = 'dark';
+addEventListener('message', e => { if (!e.data || e.data.tw !== 'ink') return; const i = [...document.querySelectorAll('#wrap iframe')].findIndex(f => f.contentWindow === e.source); if (i >= 0) inkBy[i] = e.data.v; });
+function setBarInk(k) { if (k === barInk) return; barInk = k; bar.classList.toggle('light', k === 'light'); lgImg.src = k === 'light' ? './logo/logo_彩虹_白字.png' : './logo/logo_彩虹.png'; }
 const wrap = document.getElementById('wrap'), pull = document.getElementById('pull'), pb = document.getElementById('pb');
 
 // 到了附近才加载
@@ -62,16 +95,21 @@ frames.forEach(f => { seen.observe(f); f.addEventListener('load', () => { const 
 
 // ───── 滚动：照 rejouice 用的 Lenis 的做法 ─────
 // 滚轮只改"目标位置"，页面每帧往目标走剩下距离的约 1/10（按真实时间算，屏幕快慢都一样），停得软。
-let cur = scrollY, tgt = scrollY, last = performance.now();
-const maxY = () => document.documentElement.scrollHeight - innerHeight;
-function goTo(y, smooth = true) { tgt = Math.max(0, Math.min(maxY(), y)); if (!smooth) { cur = tgt; scrollTo(0, cur); } }
+// 外层不交给浏览器滚：页面长条的位置完全由这里算（cur），每帧把长条挪到 -cur。没有"浏览器顺手滚了一下"，阻尼就不会被来回拉扯。
+let cur = 0, tgt = 0, last = performance.now();
+const fitH = () => { document.documentElement.style.setProperty('--h', innerHeight + 'px'); };   // 每一屏正好一个可见高度（手机地址栏收放也对得上）
+fitH(); addEventListener('resize', () => { fitH(); tgt = Math.min(tgt, maxY()); cur = Math.min(cur, maxY()); });
+const maxY = () => Math.max(0, wrap.offsetHeight - innerHeight);
+function goTo(y, smooth = true) { tgt = Math.max(0, Math.min(maxY(), y)); if (!smooth) cur = tgt; }
 
 // ───── 数据 → 问卷之间的阻尼：每次往下滑到这里都在 ─────
 // 数据页停稳后再往下拉，页面被拉起一点、底下出现"下拉进入问卷"，拉够了才过去；松手慢慢弹回。往上回到数据页以上，阻尼重新生效。
 const GATE = 220;                                   // 鼠标大约滚 9 下、触控板稳稳拉一下就过
 let armed = true, need = 0, lastPull = 0, landed = 0, arrived = 0;
 const WALL = () => secs[2].offsetTop;
+let lastIn = 0;
 function wheel(dy) {
+  poke(); lastIn = performance.now();
   if (performance.now() - landed < 900) return;                     // 刚拉进问卷：先落稳，剩下那几下滚轮不算
   const W = WALL();
   if (armed && dy > 0 && tgt + dy > W && tgt <= W + 1) {
@@ -90,29 +128,37 @@ function wheel(dy) {
 const norm = e => e.deltaMode === 1 ? e.deltaY * 16 : e.deltaMode === 2 ? e.deltaY * innerHeight : e.deltaY;
 addEventListener('wheel', e => { e.preventDefault(); wheel(norm(e)); }, { passive: false });
 addEventListener('keydown', e => { const d = { ArrowDown: 80, ArrowUp: -80, PageDown: innerHeight * 0.9, PageUp: -innerHeight * 0.9, ' ': innerHeight * 0.9 }[e.key]; if (d) { e.preventDefault(); wheel(d); } });
-addEventListener('scroll', () => {                                     // 拖滚动条、触屏：跟上，但也过不了阻尼那道线
-  if (Math.abs(scrollY - cur) <= 3) return;
-  if (armed && scrollY > WALL() + 2) { scrollTo(0, WALL()); cur = tgt = WALL(); return; }
-  cur = tgt = scrollY;
-}, { passive: true });
+// 外层自己收到的触摸（一般都落在各页里，各页会转过来；这里兜底）
+let oy = null;
+addEventListener('touchstart', e => { oy = e.touches[0].clientY; }, { passive: true });
+addEventListener('touchmove', e => { if (oy == null) return; const y = e.touches[0].clientY; if (e.cancelable) e.preventDefault(); wheel(oy - y); oy = y; }, { passive: false });
+addEventListener('touchend', () => { oy = null; }, { passive: true });
 (function tick(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
-  if (Math.abs(tgt - cur) > 0.3) { cur += (tgt - cur) * (1 - Math.exp(-6.3 * dt)); scrollTo(0, cur); }
-  else if (cur !== tgt) { cur = tgt; scrollTo(0, cur); }
+  // 停手 0.35 秒后：如果停在两屏中间、离某一屏不远，就轻轻落到那一屏上（每一页都是整屏的）
+  if (now - lastIn > 350) { const H0 = innerHeight; let near = secs[0].offsetTop, dmin = 1e9; secs.forEach(sc => { const d = Math.abs(sc.offsetTop - tgt); if (d < dmin) { dmin = d; near = sc.offsetTop; } });
+    if (dmin > 1 && dmin < H0 * 0.4 && !(armed && near > WALL())) tgt = Math.min(maxY(), near); }
+  if (Math.abs(tgt - cur) > 0.3) cur += (tgt - cur) * (1 - Math.exp(-6.3 * dt)); else cur = tgt;
   const H = innerHeight;
   if (cur < WALL() - H * 0.5) armed = true;                           // 回到上面去了：阻尼重新生效
   if (Math.abs(cur - WALL()) > 8) arrived = 0;
   // 两屏交界经过屏幕时，交界处晕开一条颜色，把上下两页接起来；停在某一屏时看不见
   let best = 0, bi = -1;
   for (let i = 1; i < secs.length; i++) { const y = secs[i].offsetTop - cur; if (y > 0 && y < H) { const o = Math.sin(Math.PI * y / H); if (o > best) { best = o; bi = i; } } }
-  if (bi > 0) { washTo(bi); wash.style.top = (secs[bi].offsetTop - cur - H * 0.3).toFixed(1) + 'px'; }
-  wash.style.opacity = (Math.pow(best, 1.4) * 0.7).toFixed(3);
+  if (bi > 0) wash.style.top = (secs[bi].offsetTop - cur - H * 0.17).toFixed(1) + 'px';
+  wash.style.opacity = Math.min(1, best * 1.6).toFixed(3);   // 交界在屏幕中间时最糊，停在某一屏时（交界在边上）看不见
   if (now - lastPull > 600) need *= Math.exp(-2.5 * dt);               // 松手（停下超过半秒）：慢慢弹回
   const k = need / GATE, lift = 90 * (1 - Math.exp(-k * 2.2));        // 页面被拉起一点，越拉越费劲
-  wrap.style.transform = need > 1 ? `translateY(${-lift.toFixed(1)}px)` : '';
+  wrap.style.transform = `translate3d(0, ${(-cur - (need > 1 ? lift : 0)).toFixed(1)}px, 0)`;
   pull.classList.toggle('on', armed && (need > 4 || (arrived && now - arrived < 4000)));   // 到了这儿还想往下：提醒要进问卷了
   pb.style.width = Math.min(100, k * 100).toFixed(1) + '%';
   pull.querySelector('.arr').style.transform = `translateY(${(k * 6).toFixed(1)}px)`;
+  // 导航：首页那一屏不出；滑动中、刚停下 1.6 秒内、鼠标在上面时出现
+  const sec = Math.round(cur / H), moving = Math.abs(tgt - cur) > 1;
+  if (moving) barSeen = now;
+  bar.classList.toggle('on', cur > H * 0.5 && (barHover || now - barSeen < 1600));
+  barLinks.forEach(a => a.classList.toggle('on', +a.dataset.i === sec && sec > 0));
+  setBarInk(inkBy[Math.max(0, Math.min(secs.length - 1, Math.floor((cur + 40) / H)))] || 'dark');   // 导航压着的是哪一屏，就看那一屏的深浅
   requestAnimationFrame(tick);
 })(performance.now());
 

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>The Gap</title>
+<title>Between Heart and Mouth</title>
 <link rel="icon" href="./favicon.svg"><link rel="stylesheet" href="./css/zh.css"><script src="./js/lang.js"></script><script src="./js/grd.js"></script><script src="./js/heatTitle.js"></script>
 <!--
   数据页（热岛 v3，2026-11-23）：形状照热岛 v1 原样（她说收圆之前那版好看得多）；
@@ -18,7 +18,7 @@
 html, body { height: 100%; background: #fff; overflow: hidden; }
 body { font-family: "Exposure", Georgia, serif; color: var(--ink); -webkit-font-smoothing: antialiased; }
 a { color: inherit; text-decoration: none; }
-canvas#c { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; touch-action: pan-y; }
+canvas#c { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; touch-action: none; }
 
 .logo { position: fixed; left: var(--pad); top: calc(var(--pad) - 4px); width: clamp(120px, 10vw, 150px); z-index: 3; }
 .logo img { width: 100%; display: block; }
@@ -68,10 +68,10 @@ canvas#cnt { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 3;
 
 <script type="module">
 document.getElementById('nav').innerHTML = `<a href="./关于_情绪劳动.html">${L('关于', 'About')}</a><a class="on">${L('数据', 'Data')}</a><a href="./办公桌_新布景_轮廓.html">${L('问卷', 'Survey')}</a><a href="./热像镜子.html">${L('互动', 'Interact')}</a><a href="./其他_字的热弥散.html">${L('其他', 'Other')}</a>`;
-document.getElementById('h1').textContent = L('温差', 'The Gap');
+document.getElementById('h1').textContent = L('心口之间', 'Between Heart and Mouth');
 document.getElementById('lp').textContent = L('同一件小事，换一个人面对，说出口的和心里的，就隔开了不同的距离。', 'The same small moment, faced with someone else — and the distance between what is felt and what is said shifts.');
 
-document.title = L('温差', 'The Gap');
+document.title = L('心口之间', 'Between Heart and Mouth');
 
 const DATA = await (await fetch('./data/答卷_去标识.json')).json();
 const ARMS = ['A1', 'B1', 'C1', 'A2', 'B2', 'C2', 'A3', 'B3', 'C3'];
@@ -259,13 +259,19 @@ addEventListener('pointermove', e => { if (e.pointerType === 'mouse') onPoint(e)
 addEventListener('pointerdown', onPoint);                               // 手机上点一下也算
 addEventListener('touchstart', e => { const t = e.touches[0]; if (t) onPoint({ clientX: t.clientX, clientY: t.clientY }); }, { passive: true });
 addEventListener('contextmenu', e => e.preventDefault());               // 长按不弹菜单
+// 手机：手指按在图上滑动 = 鼠标划过（这时不翻页）；按在图外面滑，才是翻页
+let chartTouch = false;
+const inChart = (x, y) => Math.hypot(x - geo.CX, y - geo.CY) < geo.R * 1.3;
+document.addEventListener('touchstart', e => { const t = e.touches[0]; chartTouch = !!t && inChart(t.clientX, t.clientY); if (chartTouch) { e.stopPropagation(); onPoint({ clientX: t.clientX, clientY: t.clientY }); } }, { capture: true, passive: true });
+document.addEventListener('touchmove', e => { if (!chartTouch) return; const t = e.touches[0]; if (e.cancelable) e.preventDefault(); e.stopPropagation(); onPoint({ clientX: t.clientX, clientY: t.clientY }); }, { capture: true, passive: false });
+document.addEventListener('touchend', e => { if (chartTouch) e.stopPropagation(); chartTouch = false; }, { capture: true, passive: true });
 
 const t0 = performance.now();
 (function frame() {
   const t = (performance.now() - t0) / 1000;
   A += ((hov >= 0 && hov === cur ? 1 : 0) - A) * 0.1; B += (0 - B) * 0.1;
   gl.uniform1f(U('uA'), A); gl.uniform1f(U('uB'), B); gl.uniform1f(U('uT'), t); gl.uniform1f(U('uIn'), Math.min(1, t / 1.4));
-  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4); TW_topInk(gl);
   requestAnimationFrame(frame);
 })();
 </script>

@@ -1,0 +1,432 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>同温层 · 茶水间 · 轮廓版</title><link rel="icon" href="./favicon.svg"><link rel="stylesheet" href="./css/zh.css"><script src="./js/lang.js"></script><script src="./js/progress.js"></script>
+<script type="importmap">{ "imports": {
+  "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/" } }</script>
+<style>
+@font-face{font-family:"Exposure";src:url("./fonts/Exposure-m20.otf") format("opentype");font-display:swap}
+@font-face{font-family:"TWC Sans";src:url("./fonts/noto-sans-sc-vf.woff2") format("woff2-variations");font-weight:100 900;font-display:swap}
+:root{--ink:#2b2730}
+*{box-sizing:border-box;margin:0}html,body{height:100%;overflow:hidden;background:#fff}
+body{font-family:var(--zh);color:var(--ink);-webkit-font-smoothing:antialiased}
+canvas{position:fixed;inset:0;width:100vw!important;height:100vh!important;cursor:grab}canvas:active{cursor:grabbing}
+.mark{position:fixed;left:5vw;top:4.6vh;width:clamp(120px,10vw,150px);display:block;z-index:3}.mark img{width:100%;display:block}
+.lang-en body{font-family:"Exposure","TWC Sans",Georgia,serif}
+.col{position:fixed;left:5vw;top:50%;transform:translateY(-50%);width:min(31vw,450px);transition:opacity .6s}
+.col.out{opacity:0}
+.no{font-size:14px;letter-spacing:.16em;opacity:.55;margin-bottom:2.2vh}
+.tx{font-size:clamp(16px,1.25vw,20px);line-height:1.8;font-weight:500}
+.q{font-size:clamp(13px,.92vw,15px);margin:3.2vh 0 1.4vh;opacity:.6;letter-spacing:.06em}
+.opts{display:flex;flex-direction:column;gap:.2vh}
+button{all:unset;cursor:pointer}
+.opts button{font-size:clamp(13.5px,.98vw,16px);line-height:1.55;padding:.75vh 0 .75vh 22px;position:relative;opacity:.78}
+.opts button::before{content:"";position:absolute;left:0;top:calc(.75vh + .45em);width:9px;height:9px;border-radius:50%;border:1px solid currentColor}
+.opts button:hover{opacity:1}.opts button[aria-pressed=true]{opacity:1;font-weight:650}.opts button[aria-pressed=true]::before{background:currentColor}
+.na{opacity:.45!important}#back{display:none}#back.on{display:block}
+.next{margin-top:3.4vh;font-size:14px;letter-spacing:.08em;border-bottom:1px solid currentColor;visibility:hidden}.next.on{visibility:visible}
+#cam{position:fixed;right:3vw;bottom:3.5vh;font-size:12px;letter-spacing:.06em;display:flex;gap:14px;align-items:center;opacity:.75}
+#cam[hidden]{display:none}#cam button{border-bottom:1px solid currentColor}#cam .ok{opacity:.6}
+body.still .col,body.still .mark,body.still #cam{display:none}
+</style></head><body>
+<a class="mark" href="./首页.html"><img src="./logo/logo_彩虹.png" alt="In the Stratospheric Realm 同温层"></a>
+<div class="col" id="col">
+  <p class="no" id="no"></p>
+  <p class="tx" id="tx"></p>
+  <p class="q" id="fq"></p>
+  <div class="opts" id="front"></div>
+  <div id="back"><p class="q" id="bq">说这句话的时候，你心里——</p><div class="opts" id="backOpts"></div></div>
+  <button class="next" id="next">下一题</button>
+</div>
+<div id="cam"><span id="camTx"></span><button id="camSave">定下这个镜头</button><span class="ok" id="camOk"></span></div>
+<script type="module">
+import * as THREE from 'three';
+import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+/* ---------- 问卷 v2.0 · 中台三题（演示按 A2 → B2 → C2 走；正式问卷的顺序是打散的） ---------- */
+const ITEMS = [
+  { shot: 'A', no: 'A2 · 中台', q: '你最后会怎么回应？',
+    text: '你和一位同学（或同事）约好今天下午一起去做一件你挺看重的事，你为此空出了时间。快到时间时，对方来跟你说临时有事，要改到下周。你有点失望。',
+    front: ['直接说：“啊，我还挺期待的，有点失望。”', '说“好吧，那下周吧”，语气里的失望也不特意收。', '平平地说“好，那改到下周”，不提失望。',
+            '笑着说“没事没事，你先忙”，不让对方看出失望。', '反过来表现得很轻松：“正好我也能再准备准备，完全没关系！”'],
+    back: ['还是有点失望', '已经没那么失望了', '说不清'] },
+  { shot: 'B', no: 'B2 · 中台', q: '你最后会怎么说？',
+    text: '一位同学（或同事）兴奋地给你看他刚做好的一个东西，问你觉得怎么样。你看了，觉得挺一般。',
+    front: ['照实说：“嗯……我觉得还行，挺一般的。”', '先夸一两句，也说出自己觉得一般的地方。', '点点头说“嗯，我仔细看看”，不说好也不说不好。',
+            '说“挺好的！”，不让对方看出你觉得一般。', '表现得很惊艳，一连夸好几句，让对方觉得你特别喜欢。'],
+    back: ['还是觉得挺一般', '好像真觉得它还不错了', '说不清'] },
+  { shot: 'C', no: 'C2 · 中台', q: '你最后会怎么说？',
+    text: '你刚得知一件让你很开心的好消息。你碰到一位同学（或同事），看出他今天正为自己的事不顺心。他随口问你最近怎么样。',
+    front: ['兴奋地把好消息说出来，开心也不收着。', '说出好消息，但收着点说，没那么兴奋。', '平平地提一句好消息，不显出开心。',
+            '不提好消息，只说“还行吧”，不让对方看出你很开心。', '反过来跟着对方叹气，表现得自己最近也不怎么样。'],
+    back: ['还是挺开心的', '开心好像真的淡下去了', '说不清'] },
+];
+// 英文版（她要求的英文问卷；Claude 照原题翻译，正式收数据前需要她审）
+const ITEMS_EN = [
+ {
+  "no": "A2 · Peer",
+  "q": "How do you finally respond?",
+  "text": "You and a classmate (or colleague) planned to do something you care about together this afternoon, and you cleared your time for it. Shortly before, they tell you something has come up and they want to move it to next week. You feel a little let down.",
+  "front": [
+   "Say it plainly: “Oh, I was really looking forward to it — I’m a bit disappointed.”",
+   "Say “Okay, next week then,” without hiding the disappointment in your voice.",
+   "Say evenly, “Sure, let’s move it to next week,” and leave the disappointment out.",
+   "Smile and say “No worries, go ahead,” so they can’t tell you’re disappointed.",
+   "Act the opposite, all relaxed: “Perfect, that gives me more time to prepare — totally fine!”"
+  ],
+  "back": [
+   "Still a little let down",
+   "Not so let down anymore",
+   "Hard to say"
+  ]
+ },
+ {
+  "no": "B2 · Peer",
+  "q": "What do you finally say?",
+  "text": "A classmate (or colleague) excitedly shows you something they have just made and asks what you think. You look at it and find it fairly ordinary.",
+  "front": [
+   "Say it honestly: “Hmm… it’s okay. Pretty ordinary, I think.”",
+   "Praise a thing or two, and also mention what feels ordinary to you.",
+   "Nod and say “Let me take a closer look,” saying neither good nor bad.",
+   "Say “It’s great!” so they can’t tell you find it ordinary.",
+   "Act amazed and pile on the praise, so they think you love it."
+  ],
+  "back": [
+   "Still find it ordinary",
+   "Starting to actually like it",
+   "Hard to say"
+  ]
+ },
+ {
+  "no": "C2 · Peer",
+  "q": "What do you finally say?",
+  "text": "You have just heard some news that makes you really happy. You run into a classmate (or colleague) and can tell they are having a rough day over something of their own. They casually ask how you have been.",
+  "front": [
+   "Share the good news excitedly, without holding back your happiness.",
+   "Share the good news, but toned down — not so excited.",
+   "Mention the good news flatly, without showing you’re happy.",
+   "Leave the good news out and just say “Not bad,” so they can’t tell you’re happy.",
+   "Do the opposite and sigh along with them, as if things haven’t been great for you either."
+  ],
+  "back": [
+   "Still happy",
+   "The happiness has actually faded",
+   "Hard to say"
+  ]
+ }
+];
+if (window.TW_LANG === 'en') ITEMS.forEach((it, i) => Object.assign(it, ITEMS_EN[i]));
+
+/* ---------- 三个镜头（three 坐标 = Blender (x, z, -y)）：A 两只瓷杯，B 木盘上的胡萝卜蛋糕，C 挪到台边的一块蛋糕 ---------- */
+const SHOTS = {
+  A: { target: [0.2, 0.04, 0.05], polar: 50, az: 14, zoom: 1.0 },
+  B: { target: [-0.66, 0.04, -0.01], polar: 50, az: 12, zoom: 1.0 },
+  C: { target: [1.11, 0.04, 0.13], polar: 50, az: 16, zoom: 1.0 },
+};
+const H = 0.2;   // 画面半高（米）：很近，东西显得很大
+for (const k in SHOTS) { try { const s = JSON.parse(localStorage.getItem('tw_cam_pantryline_' + k)); if (s) Object.assign(SHOTS[k], s); } catch (e) {} }
+
+/* ---------- 物件温度（灰的时候只看这些；答完以后热键、痕迹才显出来） ---------- */
+const HEAT = {"desk_top": 0.16, "wall": 0.1, "tablecloth": 0.13, "napkin": 0.16, "saucer": 0.3, "cup_mine": 0.34, "cup_theirs": 0.42, "spoon": 0.28, "tag": 0.24, "bottle": 0.34, "vase": 0.32, "roses": 0.3, "kettle": 0.32, "teapot": 0.32, "sugar": 0.3, "cake_board": 0.26, "cake": 0.36, "bowl": 0.3, "fruit": 0.32, "jam": 0.3, "glass": 0.3, "plate": 0.26, "slice": 0.36, "knife": 0.26, "plate_stack_b": 0.26, "cookie": 0.32, "sugar_cube": 0.26, "teabag": 0.22, "card": 0.2, "cake_box": 0.28, "ribbon": 0.24, "candle": 0.28, "crumb": 0.22, "sugar_pack": 0.2, "cup_dry": 0.28};
+const WARM = {"cup_theirs": 0.6, "cake": 0.55, "slice": 0.55};   // 答完才热：那杯倒好了、一口没动的茶   // 只在热的时候加上去：你握过的那只杯子、同事带来的蛋糕、你挪开的那块蛋糕
+const Q = new URLSearchParams(location.search), STILL = Q.has('still');
+if (STILL) document.body.classList.add('still');
+
+const renderer = new THREE.WebGLRenderer({ preserveDrawingBuffer: STILL });
+renderer.setPixelRatio(STILL ? 1 : Math.min(devicePixelRatio, 2));
+document.body.prepend(renderer.domElement);
+const scene = new THREE.Scene();
+const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.01, 50);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; controls.enablePan = false; controls.maxPolarAngle = Math.PI * 0.49;
+/* 看的人只能微微转：上下一共约 18°（±9°），左右一共约 56°（±28°），不能缩放。?edit 时放开，用来调镜头。 */
+const EDIT = Q.has('edit'), LIM = { polar: 9, az: 28 }, D2R = THREE.MathUtils.degToRad;
+controls.enableZoom = EDIT; if (!EDIT) document.getElementById('cam').hidden = true;
+function limit(k) {
+  if (EDIT) return;
+  const s = SHOTS[k];
+  controls.minPolarAngle = D2R(s.polar - LIM.polar); controls.maxPolarAngle = D2R(Math.min(88, s.polar + LIM.polar));
+  controls.minAzimuthAngle = D2R(s.az - LIM.az); controls.maxAzimuthAngle = D2R(s.az + LIM.az);
+}
+function unlimit() { controls.minPolarAngle = 0; controls.maxPolarAngle = Math.PI * 0.49; controls.minAzimuthAngle = -Infinity; controls.maxAzimuthAngle = Infinity; }
+const view = { target: new THREE.Vector3(), polar: 50, az: 0, zoom: 1 };
+function applyView() {
+  const p = THREE.MathUtils.degToRad(view.polar), a = THREE.MathUtils.degToRad(view.az), r = 6, t = view.target;
+  camera.position.set(t.x + r * Math.sin(p) * Math.sin(a), t.y + r * Math.cos(p), t.z + r * Math.sin(p) * Math.cos(a));
+  camera.zoom = view.zoom; camera.updateProjectionMatrix(); controls.target.copy(t); camera.lookAt(t); controls.update();
+}
+function readView() {   // 用户拖过以后，从相机读回角度
+  const t = controls.target, v = camera.position.clone().sub(t), r = v.length();
+  view.target.copy(t); view.polar = THREE.MathUtils.radToDeg(Math.acos(v.y / r)); view.az = THREE.MathUtils.radToDeg(Math.atan2(v.x, v.z)); view.zoom = camera.zoom;
+}
+const toShot = k => { const s = SHOTS[k]; view.target.set(...s.target); view.polar = s.polar; view.az = s.az; view.zoom = s.zoom; unlimit(); applyView(); limit(k); };
+
+/* 物件：R = 温度（侧面稍热一点，像软泥的体积），G = 答完才显的热，A = 有东西 */
+/* 焦点：镜头对着的地方最清楚，越远越淡，桌面化进白纸 */
+const FOCUS = { value: new THREE.Vector3() }, TIME = { value: 0 };
+/* 热源（2026-11-22）：每个镜头两三处 [x, y, z, 半径, 强度]——东西不是整个发亮，而是从这几处热起来 */
+const SRC = [[0.16,0.07,0.12,0.04,1],[0.25,0.04,0.08,0.03,0.7],[0.3,0.03,0.0,0.05,0.4],[-0.77,0.09,0.06,0.05,1],[-0.65,0.03,0.1,0.04,0.6],[1.03,0.08,0.22,0.05,1],[1.17,0.03,0.1,0.05,0.45]];
+const SRCU = { value: Array.from({ length: 8 }, (_, i) => new THREE.Vector4(...(SRC[i] || [0, -9, 0, 0.01]).slice(0, 4))) },
+      SRCS = { value: Array.from({ length: 8 }, (_, i) => (SRC[i] || [0, 0, 0, 0, 0])[4]) };   // TIME：东西里面的颜色慢慢涌动
+const objMat = (h, w, desk = false) => new THREE.ShaderMaterial({
+  uniforms: { uHeat: { value: h }, uWarm: { value: w }, uFocus: FOCUS, uTime: TIME, uSrc: SRCU, uSrcS: SRCS, uDesk: { value: desk ? 1 : 0 } }, side: THREE.DoubleSide,
+  vertexShader: 'varying vec3 vN, vW; void main(){ vN = normalize(normalMatrix * normal); vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }',
+  fragmentShader: `uniform float uHeat, uWarm, uDesk, uTime; uniform vec3 uFocus; uniform vec4 uSrc[8]; uniform float uSrcS[8]; varying vec3 vN, vW;
+    float hh(vec3 q){ return fract(sin(dot(q, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
+    float n3(vec3 p){ vec3 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+      return mix(mix(mix(hh(i), hh(i + vec3(1,0,0)), f.x), mix(hh(i + vec3(0,1,0)), hh(i + vec3(1,1,0)), f.x), f.y),
+                 mix(mix(hh(i + vec3(0,0,1)), hh(i + vec3(1,0,1)), f.x), mix(hh(i + vec3(0,1,1)), hh(i + vec3(1,1,1)), f.x), f.y), f.z); }
+    void main(){ float side = 1.0 - abs(normalize(vN).z);
+      float d = length((vW - uFocus).xz);
+      float k = uDesk > 0.5 ? exp(-d * d / 0.018) : mix(0.6, 1.0, exp(-d * d / 0.09));
+      float flat_ = (uDesk > 0.5 || uHeat < 0.2) ? 1.0 : 0.0;   /* 桌面、墙、桌布、餐巾都当背景：不画 */   // 桌面、墙：不算轮廓，也不出温度（不然轮廓边上会多一圈深色）
+      // 像 Daybreak 人身上的颜色：一团团在某处冒出来、胀开、再退下去（噪声的第三维是时间，所以是"冒"，不是"滑"）
+      float T = uTime * 0.22;
+      vec3 q = vec3(vW.x * 9.0 + vW.y * 4.0, vW.z * 9.0 - vW.y * 6.0, T);
+      float pk = smoothstep(0.42, 0.85, n3(q)) * 0.75 + smoothstep(0.5, 0.9, n3(q * 1.9 + 7.3)) * 0.35;   // 大团 + 小团
+      float m = n3(q * 0.6 + 3.1) * 2.0 - 1.0;
+      float mot = (pk - 0.55) * 0.34 + m * 0.07 + min(vW.y, 0.12) * 0.5 + side * 0.06;
+      // 结构：每个面按朝向落在色卡不同的位置（像 Daybreak 脸上的颧骨、鼻梁、下巴各有一块颜色）
+      float lam = dot(normalize(vN), normalize(vec3(-0.45, 0.75, 0.5)));
+      mot += lam * 0.28 - side * 0.06;
+      if (uWarm <= 0.0) mot = min(mot, 0.0);   // 配角最多热一点点，不热过主角
+      mot = flat_ > 0.5 ? 0.0 : mot;
+      float src = 0.0;
+      for (int i = 0; i < 8; i++) { vec3 dv = vW - uSrc[i].xyz; src += uSrcS[i] * exp(-dot(dv, dv) / (uSrc[i].w * uSrc[i].w)); }
+      float rs = smoothstep(0.5, 0.88, n3(vW * 16.0 + 4.7)) * 0.55 + smoothstep(0.6, 0.92, n3(vW * 31.0 + 1.3)) * 0.25;
+      src += rs * mix(0.35, 1.0, exp(-d * d / 0.06)) * (1.0 - flat_);   // 随机小热源：有轻重，但哪儿都有一点
+      src = min(src, 1.2);
+      gl_FragColor = vec4((uHeat * 0.62 + src * 0.7 + side * 0.09 + mot) * k * (1.0 - flat_), uWarm * k * (0.15 + 0.85 * min(src, 1.0)) * (0.85 + m * 0.3), 0.0, 1.0 - flat_); }`,
+});
+/* 痕迹：G = 答完显影，B = 转场时亮一下（uPulse） */
+const tex = new THREE.TextureLoader(), traceTex = {}, traces = {};
+const traceMat = name => {
+  traceTex[name] ??= Object.assign(tex.load(`./models/traces/${name}.png`), { flipY: false, colorSpace: THREE.NoColorSpace });
+  return new THREE.ShaderMaterial({
+    uniforms: { map: { value: traceTex[name] }, uHeat: { value: 0.7 }, uPulse: { value: 0 } }, transparent: true, depthWrite: false, side: THREE.DoubleSide,
+    polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
+    blending: THREE.CustomBlending, blendEquation: THREE.AddEquation, blendSrc: THREE.OneFactor, blendDst: THREE.OneFactor,
+    blendSrcAlpha: THREE.ZeroFactor, blendDstAlpha: THREE.OneFactor,
+    vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: 'uniform sampler2D map; uniform float uHeat, uPulse; varying vec2 vUv; void main(){ float a = texture2D(map, vUv).a; gl_FragColor = vec4(0.0, uHeat * a, uPulse * a, 1.0); }',
+  });
+};
+new GLTFLoader().load('./models/pantry_set.glb', g => {
+  g.scene.traverse(o => {
+    if (!o.isMesh) return;
+    const n = o.material.name.replace(/\.\d+$/, '');
+    if (n.startsWith('trace:')) { const [, t, key] = n.split(':'); o.material = traceMat(t); o.renderOrder = 2; traces[key] = o.material; }
+    else o.material = objMat(HEAT[n] ?? 0.3, WARM[n] ?? 0, n === 'desk_top' || n === 'wall');
+  });
+  scene.add(g.scene); window.__scene = scene; window.__traces = traces; window.__ready = true;
+});
+
+/* ---------- 合成（和 A2 那版一样：清晰层 + 三层弥散 + 光边 + 颗粒） ---------- */
+const VS = 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }';
+const rt = () => new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType });
+const rtS = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 4 }), rtN = [rt(), rt()], rtF = [rt(), rt()], rtW = [rt(), rt()];
+const blurQuad = new FullScreenQuad(new THREE.ShaderMaterial({
+  uniforms: { src: { value: null }, stepv: { value: new THREE.Vector2() } }, vertexShader: VS,
+  fragmentShader: `uniform sampler2D src; uniform vec2 stepv; varying vec2 vUv;
+    void main(){ vec4 a = vec4(0.0); float w = 0.0;
+      for (int i = -6; i <= 6; i++) { float f = float(i); float k = exp(-f*f/8.0); a += texture2D(src, vUv + stepv * f) * k; w += k; }
+      gl_FragColor = a / w; }`,
+}));
+function rampTex(stops) {
+  const N = 512, d = new Uint8Array(N * 4), C = stops.map(h => [1, 3, 5].map(k => parseInt(h.slice(k, k + 2), 16)));
+  for (let i = 0; i < N; i++) { const p = i / (N - 1) * (C.length - 1), k = Math.min(C.length - 2, Math.floor(p)), f = p - k;
+    d.set([0, 1, 2].map(j => C[k][j] * (1 - f) + C[k + 1][j] * f).concat(255), i * 4); }
+  const t = new THREE.DataTexture(d, N, 1); t.magFilter = t.minFilter = THREE.LinearFilter; t.needsUpdate = true; return t;
+}
+const GRAY = { ramp: rampTex(['#ffffff', '#e3dfd9', '#bdb8b1', '#8f8a84', '#5f5a55']), cap: 1, edge: 0.5, heat: 0 };
+/* 色卡按关系定死（配色工具 tone-controls.js，交接稿方案 B）：中台 · 靛紫橙绿。白底上倒着用：白 → 最浅 → …… → 最深 = 最热。
+   题目和分数只决定热度：分数越高，能用到色卡越深的那一头（cap），颜色本身不换。 */
+const PALETTE = ["#FFF4CC", "#F7BE78", "#F39443", "#E8724A", "#5D68E2"];  // 2026-11-22 画板色 5 阶，热→冷
+const SCENE_RAMP = rampTex(['#ffffff', ...PALETTE.slice().reverse()]);
+const heatState = (s, depth) => ({ ramp: SCENE_RAMP, cap: 0.4 + 0.6 * s / 4, edge: depth, heat: 1 });
+const finalQuad = new FullScreenQuad(new THREE.ShaderMaterial({
+  uniforms: {
+    tS: { value: rtS.texture }, tN: { value: rtN[1].texture }, tF: { value: rtF[1].texture }, tW: { value: rtW[1].texture },
+    rampA: { value: GRAY.ramp }, rampB: { value: GRAY.ramp }, capA: { value: 1 }, capB: { value: 1 }, edgeA: { value: .5 }, edgeB: { value: .5 },
+    heatA: { value: 0 }, heatB: { value: 0 }, focus: { value: new THREE.Vector2() }, focusR: { value: 300 }, px: { value: new THREE.Vector2() }, spread: { value: new THREE.Vector4(0, 0, 1e5, 1) }, time: { value: 0 },
+  },
+  vertexShader: VS,
+  fragmentShader: `uniform sampler2D tS, tN, tF, tW, rampA, rampB; uniform float capA, capB, edgeA, edgeB, heatA, heatB, time, focusR; uniform vec2 px, focus; uniform vec4 spread; varying vec2 vUv;
+    float h(vec2 p){ vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
+    float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
+      return mix(mix(h(i), h(i+vec2(1,0)), f.x), mix(h(i+vec2(0,1)), h(i+vec2(1,1)), f.x), f.y); }
+    float field(vec2 uv, float edge, float heat, float cap){
+      vec4 S = texture2D(tS, uv), N = texture2D(tN, uv), F = texture2D(tF, uv), W = texture2D(tW, uv);
+      // 景深：离主角在画面上的位置越远，轮廓越糊（像 Daybreak 两边的人）
+      float dd = distance(uv / px, focus) / focusR, sh = exp(-dd * dd);
+      vec2 qq = uv / px;   // 呼吸：轮廓在不同地方、不同时间，一会儿清楚、一会儿化开（Daybreak 的边就是这样）
+      float br = 0.5 + 0.5 * sin(time * 0.7 + vn(qq * 0.006) * 6.28 + vn(qq * 0.0025 + 9.0) * 3.0);
+      sh *= mix(0.25, 1.0, smoothstep(0.15, 0.85, br));
+      float mask = mix(smoothstep(0.08, 0.6, F.a), S.a, sh);
+      // 轮廓里面：用模糊后的温度（按覆盖归一），所以一件东西里颜色是晕开的、有冷有热
+      float Ni = N.r / max(N.a, 0.08), Fi = F.r / max(F.a, 0.08);
+      float inner = (Ni * mix(0.35, 0.6, edge) + Fi * mix(0.65, 0.4, edge)) * mix(0.9, 0.6, sh) + S.r * mix(0.22, 0.5, sh);
+      float rimIn = clamp((S.a - F.a) * 1.6, 0.0, 1.0);   // 轮廓里面靠边的一圈：颜色更浓
+      inner += rimIn * Fi * 0.25;
+      float halo = (W.r * 0.34 + F.r * 0.05) * heat * clamp((cap - 0.4) / 0.6, 0.0, 1.0);   // 气场：只用很宽的那层（不起圈），分数越高扩得越开   // 轮廓外面：周围的气场（桌面不出温度，所以只围着东西散，远处还是白纸）
+      vec2 e = px * 1.5;
+      vec4 sx1 = texture2D(tS, uv + vec2(e.x, 0.0)), sx0 = texture2D(tS, uv - vec2(e.x, 0.0)),
+           sy1 = texture2D(tS, uv + vec2(0.0, e.y)), sy0 = texture2D(tS, uv - vec2(0.0, e.y));
+      float g = abs(sx1.r - sx0.r) + abs(sy1.r - sy0.r);
+      float both = min(min(sx1.a, sx0.a), min(sy1.a, sy0.a));
+      float line = smoothstep(0.02, 0.08, g) * (1.0 - smoothstep(0.09, 0.18, g)) * both * mix(0.35, 1.0, sh);
+      float t = mix(halo, inner * 1.25 + 0.04, mask) - line * 0.42;
+      float Ng = N.g / max(N.a, 0.08), Fg = F.g / max(F.a, 0.08);
+      float warm = (mix(F.g * 0.5 + W.g * 0.55, (Ng * 0.6 + Fg * 0.55), mask)) * heat;   // 答完才显
+      float pulse = S.b * 0.5 + N.b * 0.6 + F.b * 0.5 + W.b * 0.3;
+      return t + warm * 0.9 + pulse;
+    }
+    vec3 shade(vec2 uv, sampler2D ramp, float cap, float edge, float heat){
+      vec2 o = px * 2.0;
+      float t = field(uv, edge, heat, cap) * 4.0 + field(uv + vec2(o.x, 0.0), edge, heat, cap) + field(uv - vec2(o.x, 0.0), edge, heat, cap)
+              + field(uv + vec2(0.0, o.y), edge, heat, cap) + field(uv - vec2(0.0, o.y), edge, heat, cap);
+      float x = max(t / 8.0, 0.0) * 0.88;
+      x = x < 0.8 ? x : 0.8 + 0.2 * (1.0 - exp(-(x - 0.8) / 0.2));
+      { float dz = (x - 0.56) / 0.07;   // 灰阶习作：亮 → 暗 → 亮（只加一丢丢，只在东西里面那个热度上）
+        x += (-0.07 * exp(-0.5 * dz * dz / 0.13) + 0.045 * exp(-0.5 * (dz + 0.8) * (dz + 0.8) / 0.13) + 0.02 * exp(-0.5 * (dz - 0.74) * (dz - 0.74) / 0.22)) * heat; }
+      return texture2D(ramp, vec2(x * cap, 0.5)).rgb;
+    }
+    void main(){
+      vec2 q = gl_FragCoord.xy;
+      float n = vn(q * 0.012) * 0.65 + vn(q * 0.05) * 0.35;
+      float d = distance(q, spread.xy) + (n - 0.5) * spread.w * 1.6;
+      float f = 1.0 - smoothstep(spread.z - spread.w, spread.z + spread.w, d);
+      vec3 c = mix(shade(vUv, rampA, capA, edgeA, heatA), shade(vUv, rampB, capB, edgeB, heatB), f);
+      float paper = smoothstep(0.985, 0.94, dot(c, vec3(0.333)));
+      c += (h(q + floor(time * 10.0) * 17.31) - 0.5) * mix(0.035, 0.11, paper);
+      gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);
+    }`,
+}));
+
+const size = new THREE.Vector2(); let dpr = 1;
+function resize() {
+  const w = innerWidth, hh = innerHeight, a = w / hh;
+  renderer.setSize(w, hh, false); renderer.getDrawingBufferSize(size); dpr = size.x / w;
+  rtS.setSize(size.x, size.y);
+  rtN.forEach(r => r.setSize(Math.ceil(size.x / 2), Math.ceil(size.y / 2)));
+  rtF.forEach(r => r.setSize(Math.ceil(size.x / 4), Math.ceil(size.y / 4)));
+  rtW.forEach(r => r.setSize(Math.ceil(size.x / 12), Math.ceil(size.y / 12)));
+  finalQuad.material.uniforms.px.value.set(1 / size.x, 1 / size.y);
+  const cx = w > 760 && !STILL ? 0.34 : 0;   // 宽屏：画面中心往右挪，让出左边的问题
+  Object.assign(camera, { left: -H * a - cx * H * a, right: H * a - cx * H * a, top: H, bottom: -H });
+  camera.updateProjectionMatrix();
+}
+addEventListener('resize', resize); resize();
+function blur(src, [a, b], sigmaPx) {
+  const s = sigmaPx * dpr / 2, U = blurQuad.material.uniforms;
+  U.src.value = src.texture; U.stepv.value.set(s / size.x, 0); renderer.setRenderTarget(a); blurQuad.render(renderer);
+  U.src.value = a.texture; U.stepv.value.set(0, s / size.y); renderer.setRenderTarget(b); blurQuad.render(renderer);
+}
+
+/* ---------- 颜色：回答 → 从画面中间晕开 ---------- */
+const FU = finalQuad.material.uniforms;
+let cur = GRAY, spreadAnim = null;
+const setAB = (k, st) => { FU['ramp' + k].value = st.ramp; FU['cap' + k].value = st.cap; FU['edge' + k].value = st.edge; FU['heat' + k].value = st.heat; };
+function go(st, dur = 2400) {
+  setAB('A', cur); setAB('B', st); cur = st;
+  const diag = Math.hypot(size.x, size.y), cx = size.x * (innerWidth > 760 && !STILL ? 0.67 : 0.5), cy = size.y * 0.5;
+  FU.spread.value.set(cx, cy, 0, diag * 0.06);
+  spreadAnim = { t0: performance.now(), dur, reach: Math.hypot(Math.max(cx, size.x - cx), size.y) + diag * 0.12 };
+}
+const ease = k => k < .5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
+
+/* ---------- 转场：这一题的指纹亮一下 → 镜头像换景一样滑到下一处 → 颜色退回灰 ---------- */
+let camAnim = null, pulseAnim = null;
+function moveTo(k, dur = 2600) {
+  const s = SHOTS[k];
+  unlimit();
+  camAnim = { t0: performance.now() + 450, dur, shot: k, from: { target: view.target.clone(), polar: view.polar, az: view.az, zoom: view.zoom },
+              to: { target: new THREE.Vector3(...s.target), polar: s.polar, az: s.az, zoom: s.zoom } };
+  controls.enabled = false;
+}
+function pulse(key) { if (traces[key]) pulseAnim = { m: traces[key], t0: performance.now(), dur: 1500 }; }
+
+/* ---------- 问卷流程 ---------- */
+const $ = id => document.getElementById(id);
+const col = $('col'), front = $('front'), back = $('back'), backOpts = $('backOpts'), next = $('next');
+let idx = 0, score = null, depth = 0.5;
+const press = (box, el) => box.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b === el));
+function showItem(i) {
+  const it = ITEMS[i];
+  $('no').textContent = it.no; $('tx').textContent = it.text; $('fq').textContent = it.q;
+  front.innerHTML = it.front.map((t, v) => `<button data-v="${v}">${t}</button>`).join('') + `<button class="na" data-v="na">${L('无法代入', 'Can’t picture it')}</button>`;
+  $('bq').textContent = L('说这句话的时候，你心里——', 'As you say it, inside you —');
+  backOpts.innerHTML = it.back.map((t, j) => `<button data-b="${j}">${t}</button>`).join('');
+  back.classList.remove('on'); next.classList.remove('on'); next.textContent = i < ITEMS.length - 1 ? L('下一题', 'Next') : L('下一张桌子', 'Next table');
+  front.querySelectorAll('button').forEach(b => b.onclick = () => {
+    press(front, b); press(backOpts, null);
+    if (b.dataset.v === 'na') { save(ITEMS[idx], null, null); back.classList.remove('on'); next.classList.add('on'); go(GRAY); return; }
+    score = +b.dataset.v; depth = 0.5; save(ITEMS[idx], score, null); back.classList.toggle('on', score > 0); next.classList.toggle('on', score === 0);
+    go(heatState(score, depth));
+  });
+  backOpts.querySelectorAll('button').forEach(b => b.onclick = () => {
+    press(backOpts, b); depth = [0, 1, 0.5][+b.dataset.b]; save(ITEMS[idx], score, ['surface', 'deep', 'unsure'][+b.dataset.b], +b.dataset.b); next.classList.add('on'); go(heatState(score, depth));
+  });
+}
+// 答案存在本机（tw_answers_v2），热像镜子读它；格子名 = 镜头字母 + 台号，比如 A1
+function save(it, sc, acting, bi) {
+  try { const a = JSON.parse(localStorage.getItem('tw_answers_v2') || '{}'); const cell = it.shot + '2';
+    a[cell] = { score: sc, acting: sc ? acting : null, no: it.no, ans: sc == null ? L('无法代入', 'Can’t picture it') : it.front[sc], feel: sc && bi != null ? it.back[bi] : null };
+    localStorage.setItem('tw_answers_v2', JSON.stringify(a)); } catch (e) {}
+}
+next.onclick = () => {
+  if (idx === ITEMS.length - 1) { location.href = './小桌_新布景_轮廓.html'; return; }   // 这张桌子答完：去下一张（最后一张去看自己的温度）
+  pulse(ITEMS[idx].shot);
+  idx = (idx + 1) % ITEMS.length;
+  col.classList.add('out');
+  setTimeout(() => { showItem(idx); col.classList.remove('out'); }, 900);
+  moveTo(ITEMS[idx].shot);
+  setTimeout(() => go(GRAY, 2000), 700);
+};
+const START = Q.get('shot') || 'A'; idx = Math.max(0, ITEMS.findIndex(it => it.shot === START));
+showItem(idx); toShot(START);
+if (Q.has('review')) {   // 回顾：把当时选的标出来，热痕照当时的分数
+  const mine = TW_answers()[ITEMS[idx].shot + '2'];
+  if (mine) { const fb = front.querySelector(`[data-v="${mine.score == null ? 'na' : mine.score}"]`); if (fb) press(front, fb);
+    if (mine.score) { back.classList.add('on'); const bi = ITEMS[idx].back.indexOf(mine.feel); if (bi >= 0) press(backOpts, backOpts.children[bi]); } }
+  next.classList.add('on'); next.textContent = L('回到我的温度', 'Back to my temperature'); next.onclick = () => { location.href = './热像镜子.html?open'; };
+  front.querySelectorAll('button').forEach(b => b.disabled = true); backOpts.querySelectorAll('button').forEach(b => b.disabled = true);
+}
+if (Q.has('score')) { const st = heatState(+Q.get('score'), Q.has('depth') ? +Q.get('depth') : 0.5); cur = st; setAB('A', st); setAB('B', st); }
+window.__go = (s, dp = 0.5) => go(s < 0 ? GRAY : heatState(s, dp), 10);
+window.__shot = k => toShot(k); window.__move = moveTo; window.__pulse = pulse; window.__next = () => next.onclick();
+
+/* 编辑：每个镜头的角度可以拖了以后存下来 */
+const curShot = () => camAnim ? null : ITEMS[idx].shot;
+setInterval(() => { readView(); $('camTx').textContent = `镜头 ${curShot() ?? '…'} · 俯角 ${(90 - view.polar).toFixed(0)}° · 方位 ${view.az.toFixed(0)}° · 缩放 ${view.zoom.toFixed(2)}`; }, 250);
+$('camSave').onclick = () => {
+  const k = curShot(); if (!k) return; readView();
+  const v = { target: view.target.toArray().map(x => +x.toFixed(3)), polar: +view.polar.toFixed(1), az: +view.az.toFixed(1), zoom: +view.zoom.toFixed(3) };
+  SHOTS[k] = v; try { localStorage.setItem('tw_cam_pantryline_' + k, JSON.stringify(v)); } catch (e) {}
+  console.log('TW_CAMERA pantry_set', k, JSON.stringify(v)); $('camOk').textContent = `镜头 ${k} 已存`;
+};
+
+renderer.setAnimationLoop(t => {
+  const now = performance.now();
+  if (spreadAnim) { const k = Math.min(1, (now - spreadAnim.t0) / spreadAnim.dur); FU.spread.value.z = ease(k) * spreadAnim.reach;
+    if (k >= 1) { spreadAnim = null; FU.spread.value.z = 1e5; setAB('A', cur); } }
+  if (pulseAnim) { const k = Math.min(1, (now - pulseAnim.t0) / pulseAnim.dur); pulseAnim.m.uniforms.uPulse.value = Math.sin(Math.PI * k) * 1.4;
+    if (k >= 1) { pulseAnim.m.uniforms.uPulse.value = 0; pulseAnim = null; } }
+  if (camAnim && now >= camAnim.t0) {
+    const k = Math.min(1, (now - camAnim.t0) / camAnim.dur), e = ease(k), f = camAnim.from, to = camAnim.to;
+    view.target.lerpVectors(f.target, to.target, e); view.polar = f.polar + (to.polar - f.polar) * e; view.az = f.az + (to.az - f.az) * e;
+    view.zoom = (f.zoom + (to.zoom - f.zoom) * e) * (1 - 0.18 * Math.sin(Math.PI * e));   // 中途稍微拉远一点，像镜头退后再推进
+    applyView(); if (k >= 1) { limit(camAnim.shot); camAnim = null; controls.enabled = true; }
+  }
+  FOCUS.value.copy(view.target); TIME.value = t / 1000;
+  { const fp = view.target.clone().project(camera); FU.focus.value.set((fp.x * 0.5 + 0.5) * size.x, (fp.y * 0.5 + 0.5) * size.y); FU.focusR.value = size.y * 0.42; }
+  FU.time.value = t / 1000;
+  if (!camAnim) controls.update();
+  renderer.setClearColor(0x000000, 0); renderer.setRenderTarget(rtS); renderer.clear(); renderer.render(scene, camera);
+  blur(rtS, rtN, 4); blur(rtS, rtF, 40); blur(rtS, rtW, 150);   // A2 样张：近处模糊 8→4   // 弥散比第一版大（第一版 6 / 26 / 90）
+  renderer.setRenderTarget(null); finalQuad.render(renderer);
+});
+</script>
+</body></html>

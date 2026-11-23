@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>In the Stratospheric Realm</title>
+<link rel="icon" href="./favicon.svg"><link rel="stylesheet" href="./css/zh.css"><script src="./js/lang.js"></script><script src="./js/grd.js"></script>
+<!--
+  滑动版（2026-11-23 定）：全站就这一种看法——普通地往下滚。单独打开站里任何一页都会被送到这里、停在那一页（js/lang.js）。
+  首页 → 关于 → 九十三种温度 ┊ 问卷 → 互动
+  只在"九十三种温度"和"问卷"之间有一点阻尼：滚到底再往下拉，页面被拉起一点、底下出现"继续下拉，进入问卷"，
+  拉够了才接上问卷和互动；松手就慢慢弹回。没有单独的提醒页。
+-->
+<style>
+@font-face { font-family: "Exposure"; src: url("./fonts/Exposure-m20.otf") format("opentype"); font-display: swap; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { background: #fff; }
+body { font-family: "Exposure", Georgia, serif; color: #1b181d; -webkit-font-smoothing: antialiased; }
+#wrap { will-change: transform; }
+.sec { height: 100vh; position: relative; overflow: hidden; }
+.sec iframe { display: block; width: 100%; height: 100%; border: 0; background: #fff; }
+
+/* 下拉提醒：滚到数据页底下再往下拉才出现 */
+#wash { position: fixed; left: 0; right: 0; height: 60vh; z-index: 4; pointer-events: none; opacity: 0; filter: blur(18px); }
+.pull { position: fixed; left: 50%; bottom: 22px; z-index: 6; transform: translate(-50%, 16px); opacity: 0; pointer-events: none; text-align: center;
+  font-size: 13.5px; letter-spacing: .04em; transition: opacity .25s, transform .3s; }
+.pull.on { opacity: 1; transform: translate(-50%, 0); }
+.pull .arr { display: block; font-size: 18px; margin-bottom: 6px; transition: transform .2s; }
+.pull .bar { display: block; width: 120px; height: 2px; margin: 10px auto 0; background: rgba(27,24,29,.12); border-radius: 2px; overflow: hidden; }
+.pull .bar i { display: block; height: 100%; width: 0; background: #1b181d; }
+.lang-zh .pull { font-weight: 330; letter-spacing: .12em; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <section class="sec"><iframe data-src="./首页.html" title="Home"></iframe></section>
+  <section class="sec"><iframe data-src="./关于_情绪劳动.html" title="About"></iframe></section>
+  <section class="sec" id="data"><iframe data-src="./数据_九十三种温度.html" title="Data"></iframe></section>
+  <section class="sec later" id="survey"><iframe data-src="./办公桌_新布景_轮廓.html" title="Survey"></iframe></section>
+  <section class="sec later"><iframe data-src="./热像镜子.html" title="Interact" allow="camera"></iframe></section>
+</div>
+<div id="wash"></div>
+<div class="pull" id="pull"><span class="arr">↓</span><span id="pt"></span><span class="bar"><i id="pb"></i></span></div>
+
+<script>
+if ('scrollRestoration' in history) history.scrollRestoration = 'manual';   // 每次都从该在的那一屏开始，不接着上次的位置
+document.getElementById('pt').textContent = L('下拉进入问卷', 'Pull to enter the survey');
+// 每个交界用哪条渐变：首页→关于 前台；关于→数据 后台；数据→问卷 中台；问卷→互动 前台
+const SEAM = [null, 'front', 'back', 'mid', 'front'], wash = document.getElementById('wash'); let washI = -1;
+function washTo(i) { if (i === washI) return; washI = i; const n = SEAM[i], c = t => `rgba(${TW_grdAt(n, t).map(Math.round)},`;
+  wash.style.background = `linear-gradient(to bottom, ${c(0.05)}0) 0%, ${c(0.2)}.55) 28%, ${c(0.75)}.85) 50%, ${c(0.95)}.55) 72%, ${c(1)}0) 100%)`; }
+const wrap = document.getElementById('wrap'), pull = document.getElementById('pull'), pb = document.getElementById('pb');
+
+// 到了附近才加载
+const frames = [...document.querySelectorAll('iframe[data-src]')];
+const secs = [...document.querySelectorAll('#wrap > section')];
+const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting && !e.target.src) e.target.src = e.target.dataset.src; }), { rootMargin: '60% 0px' });
+frames.forEach(f => io.observe(f));
+
+// ───── 滚动：照 rejouice 用的 Lenis 的做法 ─────
+// 滚轮只改"目标位置"，页面每帧往目标走剩下距离的约 1/10（按真实时间算，屏幕快慢都一样），停得软。
+let cur = scrollY, tgt = scrollY, last = performance.now();
+const maxY = () => document.documentElement.scrollHeight - innerHeight;
+function goTo(y, smooth = true) { tgt = Math.max(0, Math.min(maxY(), y)); if (!smooth) { cur = tgt; scrollTo(0, cur); } }
+
+// ───── 数据 → 问卷之间的阻尼：每次往下滑到这里都在 ─────
+// 数据页停稳后再往下拉，页面被拉起一点、底下出现"下拉进入问卷"，拉够了才过去；松手慢慢弹回。往上回到数据页以上，阻尼重新生效。
+const GATE = 220;                                   // 鼠标大约滚 9 下、触控板稳稳拉一下就过
+let armed = true, need = 0, lastPull = 0, landed = 0, arrived = 0;
+const WALL = () => secs[2].offsetTop;
+function wheel(dy) {
+  if (performance.now() - landed < 900) return;                     // 刚拉进问卷：先落稳，剩下那几下滚轮不算
+  const W = WALL();
+  if (armed && dy > 0 && tgt + dy > W && tgt <= W + 1) {
+    tgt = W;
+    if (Math.abs(cur - W) < 8) {                                       // 停稳在数据页了才开始攒
+      const now = performance.now();
+      if (!arrived) arrived = now;
+      if (now - arrived < 650) return;                                 // 刚到：先停一下，把这一甩的惯性吃掉
+      need = Math.min(GATE * 1.05, need + Math.min(dy, 30) * 0.8); lastPull = now;
+      if (need >= GATE) { armed = false; need = 0; landed = performance.now(); goTo(secs[3].offsetTop); }
+    }
+    return;
+  }
+  goTo(tgt + dy);
+}
+const norm = e => e.deltaMode === 1 ? e.deltaY * 16 : e.deltaMode === 2 ? e.deltaY * innerHeight : e.deltaY;
+addEventListener('wheel', e => { e.preventDefault(); wheel(norm(e)); }, { passive: false });
+addEventListener('keydown', e => { const d = { ArrowDown: 80, ArrowUp: -80, PageDown: innerHeight * 0.9, PageUp: -innerHeight * 0.9, ' ': innerHeight * 0.9 }[e.key]; if (d) { e.preventDefault(); wheel(d); } });
+addEventListener('scroll', () => {                                     // 拖滚动条、触屏：跟上，但也过不了阻尼那道线
+  if (Math.abs(scrollY - cur) <= 3) return;
+  if (armed && scrollY > WALL() + 2) { scrollTo(0, WALL()); cur = tgt = WALL(); return; }
+  cur = tgt = scrollY;
+}, { passive: true });
+(function tick(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  if (Math.abs(tgt - cur) > 0.3) { cur += (tgt - cur) * (1 - Math.exp(-6.3 * dt)); scrollTo(0, cur); }
+  else if (cur !== tgt) { cur = tgt; scrollTo(0, cur); }
+  const H = innerHeight;
+  if (cur < WALL() - H * 0.5) armed = true;                           // 回到上面去了：阻尼重新生效
+  if (Math.abs(cur - WALL()) > 8) arrived = 0;
+  // 两屏交界经过屏幕时，交界处晕开一条颜色，把上下两页接起来；停在某一屏时看不见
+  let best = 0, bi = -1;
+  for (let i = 1; i < secs.length; i++) { const y = secs[i].offsetTop - cur; if (y > 0 && y < H) { const o = Math.sin(Math.PI * y / H); if (o > best) { best = o; bi = i; } } }
+  if (bi > 0) { washTo(bi); wash.style.top = (secs[bi].offsetTop - cur - H * 0.3).toFixed(1) + 'px'; }
+  wash.style.opacity = (Math.pow(best, 1.4) * 0.7).toFixed(3);
+  if (now - lastPull > 600) need *= Math.exp(-2.5 * dt);               // 松手（停下超过半秒）：慢慢弹回
+  const k = need / GATE, lift = 90 * (1 - Math.exp(-k * 2.2));        // 页面被拉起一点，越拉越费劲
+  wrap.style.transform = need > 1 ? `translateY(${-lift.toFixed(1)}px)` : '';
+  pull.classList.toggle('on', armed && (need > 4 || (arrived && now - arrived < 4000)));   // 到了这儿还想往下：提醒要进问卷了
+  pb.style.width = Math.min(100, k * 100).toFixed(1) + '%';
+  pull.querySelector('.arr').style.transform = `translateY(${(k * 6).toFixed(1)}px)`;
+  requestAnimationFrame(tick);
+})(performance.now());
+
+// 各页传上来的：滑到头了（带着整页滚，或者交给阻尼）/ 点了站内链接 / 换语言
+// 问卷的三张桌子都在"问卷"那一屏里换
+const MAP = { '首页.html': 0, '关于_情绪劳动.html': 1, '数据_九十三种温度.html': 2, '办公桌_新布景_轮廓.html': 3, '茶水间_新布景_轮廓.html': 3, '小桌_新布景_轮廓.html': 3, '热像镜子.html': 4 };
+const base = h => decodeURIComponent(h.split('?')[0].split('#')[0].replace(/^\.\//, '').split('/').pop());
+const pageOf = f => { try { return base(f.contentWindow.location.pathname) + f.contentWindow.location.search; } catch (e) { return ''; } };
+// 翻到某一页；带参数或换了桌子，就把那一屏换成这个地址
+function show(href, smooth = true) {
+  const i = MAP[base(href)]; if (i == null) { location.href = href; return; }
+  const f = secs[i].querySelector('iframe'), want = './' + href.replace(/^\.\//, '');
+  if (href.includes('?') || base(href) !== base(f.getAttribute('src') || f.dataset.src)) f.src = want;
+  else if (!f.getAttribute('src')) f.src = f.dataset.src;
+  if (i >= 3) armed = false;                                          // 点链接过去的：不用拉
+  goTo(secs[i].offsetTop, smooth);
+}
+// 页面里用脚本跳走的（答完一张桌子去下一张、最后去看自己的温度、回顾、重新答题）：落到它该在的那一屏
+frames.forEach((f, k) => f.addEventListener('load', () => {
+  const pg = pageOf(f); if (!pg) return; const i = MAP[base(pg)];
+  if (i == null || secs[i] === f.closest('section')) return;
+  f.src = f.dataset.src;                                              // 这一屏回到原来的页
+  show(pg);
+}));
+addEventListener('message', e => {
+  const m = e.data; if (!m || !m.tw) return;
+  if (m.tw === 'wheel') wheel(m.dy);
+  if (m.tw === 'lang') { try { localStorage.setItem('tw_lang', m.v); } catch (er) {} location.reload(); }
+  if (m.tw === 'go') show(m.href);
+});
+// 从单独的页面送进来的：?p=那一页
+{ const p = new URLSearchParams(location.search).get('p');
+  if (p) { history.replaceState(null, '', location.pathname); show(p, false); } }
+</script>
+</body>
+</html>

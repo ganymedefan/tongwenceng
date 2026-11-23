@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ninety-Three Temperatures</title>
+<link rel="icon" href="./favicon.svg"><link rel="stylesheet" href="./css/zh.css"><script src="./js/lang.js"></script><script src="./js/grd.js"></script>
+<script type="importmap">{ "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/" } }</script>
+<!--
+  「其他」页（原来的数据页热弥散字版，2026-11-23 她说很美但数据页不这样放，单独成一页）：九格 = 三类关系 × 三件事；每格写那件事的名字，字本身就是一块热源。
+  · 平均分越高：字越热、热晕往外扩得越开（视觉上把 1.5–2.7 这一段拉开来表现，数字在悬停时照实写）
+  · "感受也变了"（深层）占比越高：字的边被颗粒吃掉得越多（弥散、消失）——参考 Brik · Dissolve Type Echo（Lera Lesyk，改自 Or Yogev 的 DSSLV）
+  · 颜色：这一关系所属台的色卡，白底
+  数据：data/答卷_去标识.json。上一版（散点）在 数据_九十三种温度_散点版_备份.html
+-->
+<style>
+@font-face { font-family: "TWC Sans"; src: url("./fonts/noto-sans-sc-vf.woff2") format("woff2-variations"); font-weight: 100 900; font-display: swap; }
+@font-face { font-family: "Exposure"; src: url("./fonts/Exposure-m20.otf") format("opentype"); font-display: swap; }
+:root { --ink: #1b181d; --mute: #8b868d; --pad: clamp(18px, 2.4vw, 36px); }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; background: #fff; overflow: hidden; }
+body { font-family: "Exposure", Georgia, serif; color: var(--ink); -webkit-font-smoothing: antialiased; }
+.lang-zh body { font-family: var(--zh); }
+a { color: inherit; text-decoration: none; }
+canvas#c { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; }
+
+.logo { position: fixed; left: var(--pad); top: calc(var(--pad) - 4px); width: clamp(120px, 10vw, 150px); z-index: 3; }
+.logo img { width: 100%; display: block; }
+.nav { position: fixed; right: var(--pad); top: var(--pad); z-index: 3; display: flex; gap: 22px; font-size: 14px; }
+.nav a { color: var(--mute); } .nav a:hover, .nav a.on { color: var(--ink); }
+
+.lede { position: fixed; left: var(--pad); bottom: var(--pad); z-index: 3; width: min(28vw, 400px); pointer-events: none; }
+.lede h1 { font-size: 13px; font-weight: 400; color: var(--mute); letter-spacing: .02em; margin-bottom: 12px; }
+.lede p { font-size: clamp(17px, 1.45vw, 23px); line-height: 1.3; }
+.lang-zh .lede p { font-weight: 500; line-height: 1.55; letter-spacing: .02em; }
+.lede small { display: block; margin-top: 14px; font-size: 12.5px; line-height: 1.6; color: var(--mute); }
+
+.rows { position: fixed; inset: 0; z-index: 3; pointer-events: none; font-size: 13px; color: var(--mute); }
+.rows span { position: absolute; white-space: nowrap; }
+
+.tip { position: fixed; z-index: 4; pointer-events: none; font-size: 13px; line-height: 1.45; background: rgba(255,255,255,.95); padding: 9px 11px; border-radius: 6px;
+  box-shadow: 0 1px 0 rgba(0,0,0,.06); opacity: 0; transition: opacity .2s; white-space: nowrap; }
+.tip b { font-weight: 400; display: block; margin-bottom: 2px; }
+.tip small { color: var(--mute); font-size: 12px; display: block; }
+
+@media (max-width: 900px) {
+  .lede { width: auto; right: var(--pad); }
+  .nav { gap: 14px; font-size: 13px; }
+}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<a class="logo" href="./首页.html"><img src="./logo/logo_彩虹.png" alt="In the Stratospheric Realm"></a>
+<nav class="nav" id="nav"></nav>
+<div class="rows" id="rows"></div>
+<div class="lede"><h1 id="h1"></h1><p id="lp"></p><small id="ls"></small></div>
+<div class="tip" id="tip"></div>
+
+<script type="module">
+import * as THREE from 'three';
+import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
+
+// ───── 文字 ─────
+document.getElementById('nav').innerHTML = `<a href="./关于_情绪劳动.html">${L('关于', 'About')}</a><a href="./数据_九十三种温度.html">${L('数据', 'Data')}</a><a href="./办公桌_新布景_轮廓.html">${L('问卷', 'Survey')}</a><a href="./热像镜子.html">${L('互动', 'Interact')}</a><a class="on">${L('其他', 'Other')}</a>`;
+document.getElementById('h1').textContent = L('九十三种温度', 'Ninety-Three Temperatures');
+document.getElementById('lp').textContent = L('九十三个人，九个日常时刻。', 'Ninety-three people, nine everyday moments.');
+
+document.title = L('九十三种温度', 'Ninety-Three Temperatures');
+
+// ───── 数据：每格平均分、深层占比 ─────
+const DATA = await (await fetch('./data/答卷_去标识.json')).json();
+const CELLS = ['A1', 'B1', 'C1', 'A2', 'B2', 'C2', 'A3', 'B3', 'C3'];
+const WORD = { A: L('改期', 'Postponed'), B: L('看作品', 'Their work'), C: L('好消息', 'Good news') };
+const EVT = { A: L('约好的事被改到下周', 'a plan postponed'), B: L('对方给你看他做的东西', 'they show you their work'), C: L('你有好消息，对方正不顺', 'your good news, their bad day') };
+const REL = { 1: L('导师或上级', 'Supervisor'), 2: L('同学或同事', 'Peer'), 3: L('很亲近的人', 'Someone close') };
+const stats = CELLS.map(cell => {
+  const sc = DATA.map(p => p.cells[cell].score).filter(v => v != null);
+  const ac = DATA.map(p => p.cells[cell]).filter(c => c.score != null && c.score > 0).map(c => c.acting);
+  const deep = ac.reduce((s, a) => s + (a === 'deep' ? 1 : a === 'unsure' ? 0.5 : 0), 0) / Math.max(1, ac.length);
+  return { cell, mean: sc.reduce((a, b) => a + b, 0) / sc.length, n: sc.length, deep };
+});
+
+// ───── 画布 ─────
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
+const DPR = Math.min(devicePixelRatio || 1, 1.5); renderer.setPixelRatio(DPR);
+// 她的三条 PS 渐变（js/grd.js，按原色标位置）：前台 粉红、中台 橙蓝、后台 薄荷蓝紫柠檬黄
+const rampTex = (() => { const N = 128, a = new Uint8Array(N * 3 * 4);
+  ['front', 'mid', 'back'].forEach((name, r) => { TW_grdStrip(name, N).forEach((c, i) => { const o = (r * N + i) * 4; a[o] = c[0]; a[o + 1] = c[1]; a[o + 2] = c[2]; a[o + 3] = 255; }); });
+  const t = new THREE.DataTexture(a, N, 3, THREE.RGBAFormat); t.magFilter = t.minFilter = THREE.LinearFilter; t.needsUpdate = true; return t; })();
+
+// 字的遮罩：清楚的一张 + 三张越来越糊的（缩小再放大来糊，所有浏览器都一样）
+const mk = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
+let texS, texN, texF, texW, grid = null;
+try { await document.fonts.load(`380 100px MiSans`, '改期看作品好消息'); await document.fonts.load(`100px "Exposure"`); } catch (e) {}
+const FONT = fs => window.TW_LANG === 'en' ? `${fs}px Exposure, Georgia, serif` : `380 ${fs}px MiSans, sans-serif`;
+function buildMasks() {
+  const W = innerWidth, H = innerHeight, mw = Math.round(W * 0.75), mh = Math.round(H * 0.75), sc = mw / W;
+  const narrow = W < 900;
+  const gx0 = narrow ? W * 0.06 : Math.max(W * 0.33, 430), gx1 = W - W * 0.04;
+  const gy0 = narrow ? H * 0.13 : H * 0.15, gy1 = narrow ? H * 0.64 : H * 0.9;
+  const cw = (gx1 - gx0) / 3, ch = (gy1 - gy0) / 3;
+  grid = { gx0, gy0, cw, ch };
+  const maskS = mk(mw, mh), x = maskS.getContext('2d'); x.fillStyle = '#000'; x.fillRect(0, 0, mw, mh); x.fillStyle = '#fff'; x.textAlign = 'center'; x.textBaseline = 'middle';
+  CELLS.forEach((cell, i) => {
+    const col = i % 3, row = Math.floor(i / 3), cx = (gx0 + cw * (col + 0.5)) * sc, cy = (gy0 + ch * (row + 0.5)) * sc;
+    const word = WORD[cell[0]];
+    let fs = Math.min(ch * 0.4, cw * 0.3) * sc; x.font = FONT(fs);
+    const tw = x.measureText(word).width, lim = cw * sc * 0.82; if (tw > lim) { fs *= lim / tw; x.font = FONT(fs); }
+    x.fillText(word, cx, cy);
+  });
+  const down = (src, k) => { const c = mk(Math.max(8, Math.round(src.width / k)), Math.max(8, Math.round(src.height / k))); const g = c.getContext('2d'); g.imageSmoothingQuality = 'high'; g.drawImage(src, 0, 0, c.width, c.height); return c; };
+  const maskN = down(down(maskS, 2), 3), maskF = down(down(maskN, 2), 2), maskW = down(down(maskF, 2), 3);   // 约 1/6、1/24、1/144
+  const tex = c => { const t = new THREE.CanvasTexture(c); t.magFilter = t.minFilter = THREE.LinearFilter; t.generateMipmaps = false; return t; };
+  [texS, texN, texF, texW].forEach(t => t && t.dispose());
+  texS = tex(maskS); texN = tex(maskN); texF = tex(maskF); texW = tex(maskW);
+  document.getElementById('rows').innerHTML = [1, 2, 3].map((r, k) => `<span style="left:${gx0 + 6}px;top:${gy0 + ch * k + 6}px">${REL[r]}</span>`).join('');
+}
+
+// 每格的参数：x = 热（平均分拉开到 0..1），y = 深层占比，z = 台（0,1,2）
+const lo = 1.5, hi = 2.7;
+const cellU = stats.map((s, i) => new THREE.Vector3(Math.min(1, Math.max(0, (s.mean - lo) / (hi - lo))), s.deep, Math.floor(i / 3)));
+const U = {
+  uS: { value: null }, uN: { value: null }, uF: { value: null }, uW: { value: null }, uRamp: { value: rampTex },
+  uRes: { value: new THREE.Vector2() }, uT: { value: 0 }, uGrid: { value: new THREE.Vector4() }, uCell: { value: cellU }, uHover: { value: -1 }, uIn: { value: 0 },
+};
+const quad = new FullScreenQuad(new THREE.ShaderMaterial({
+  uniforms: U,
+  vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec4(position.xy,0.,1.); }`,
+  fragmentShader: /* glsl */`
+    uniform sampler2D uS, uN, uF, uW, uRamp; uniform vec2 uRes; uniform float uT, uHover, uIn; uniform vec4 uGrid; uniform vec3 uCell[9];
+    varying vec2 vUv;
+    float h2(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
+    float n2(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.0-2.0*f); return mix(mix(h2(i),h2(i+vec2(1,0)),f.x),mix(h2(i+vec2(0,1)),h2(i+vec2(1,1)),f.x),f.y); }
+    void main(){
+      vec2 uv = vUv;                                          // 画布贴图已经翻过一次
+      vec2 px = vec2(vUv.x, 1.0 - vUv.y) * uRes;             // 页面坐标（css px，从上往下）
+      vec2 g = (px - uGrid.xy) / uGrid.zw; vec2 gi = clamp(floor(g), 0.0, 2.0);
+      float fi = gi.y*3.0 + gi.x;
+      // 按离各格中心的远近平滑混合参数（不在格子边上一刀切）
+      vec3 P = vec3(0.0); float ws = 0.0;
+      for(int k=0;k<9;k++){ vec2 c = vec2(mod(float(k),3.0), floor(float(k)/3.0)) + 0.5; vec2 d = g - c;
+        float w = exp(-dot(d*vec2(1.0,1.6), d*vec2(1.0,1.6)) * 3.0) + 1e-5; P += uCell[k]*w; ws += w; }
+      P /= ws;
+      float heat = P.x, deep = P.y, st = P.z;
+      float hov = (uHover > -0.5 && abs(fi - uHover) < 0.5) ? 1.0 : 0.0;
+      float S = texture2D(uS, uv).r, N = texture2D(uN, uv).r, F = texture2D(uF, uv).r, W = texture2D(uW, uv).r;
+      // 热场：字最热，往外一圈圈散；平均分越高，外圈越大越亮
+      float spread = 0.4 + 0.6*heat;
+      float wob = n2(px*0.012 + vec2(uT*0.25, -uT*0.18)) - 0.5;
+      float field = S*0.4 + N*0.55 + F*(0.95*spread) + W*(1.15*spread*spread) + wob*0.12*(F+W);
+      field *= (0.68 + 0.36*heat) * (0.9 + 0.2*hov) * uIn;
+      // 灰阶习作那种"亮-暗-亮"的轮廓带
+      float x = clamp(field, 0.0, 1.25);
+      float dz = (x - 0.45)/0.06; x += -0.06*exp(-0.5*dz*dz) + 0.035*exp(-0.5*(dz+1.1)*(dz+1.1));
+      // 弥散：颗粒从外往里把热吃掉；深层占比越高，吃得越多
+      float eat = 0.25 + 0.6*smoothstep(0.33, 0.42, deep);
+      float grain = h2(floor(px/1.3) + floor(uT*12.0)*7.13);
+      float keep = step(grain * eat, smoothstep(0.02, 0.5, x));
+      float a = smoothstep(0.03, 0.32, x) * keep;
+      // 往两头走：外圈是渐变起点（冷），很快淡进白底；中心走到亮的那一头；深色只是中间窄窄一圈
+      float xr = clamp(x, 0.0, 1.0); xr = xr < 0.5 ? 0.5*pow(xr/0.5, 1.6) : 0.5 + 0.5*pow((xr-0.5)/0.5, 0.45);
+      vec3 col = texture2D(uRamp, vec2(xr, (st + 0.5)/3.0)).rgb;
+      col += (h2(px*0.71 + floor(uT*12.0)) - 0.5) * 0.05;
+      gl_FragColor = vec4(mix(vec3(1.0), col, a), 1.0);
+    }`,
+  depthTest: false, depthWrite: false }));
+
+function resize() {
+  renderer.setSize(innerWidth, innerHeight, false); U.uRes.value.set(innerWidth, innerHeight);
+  buildMasks();
+  U.uS.value = texS; U.uN.value = texN; U.uF.value = texF; U.uW.value = texW;
+  U.uGrid.value.set(grid.gx0, grid.gy0, grid.cw, grid.ch);
+}
+addEventListener('resize', resize); resize();
+
+// 悬停：哪一格 → 数字
+const tip = document.getElementById('tip');
+let hov = -1;
+addEventListener('pointermove', e => {
+  const gx = (e.clientX - grid.gx0) / grid.cw, gy = (e.clientY - grid.gy0) / grid.ch;
+  hov = gx >= 0 && gx < 3 && gy >= 0 && gy < 3 ? Math.floor(gy) * 3 + Math.floor(gx) : -1;
+  if (hov >= 0) {
+    const s = stats[hov];
+    tip.innerHTML = `<b>${REL[s.cell[1]]} · ${EVT[s.cell[0]]}</b><small>${L('平均', 'mean')} ${s.mean.toFixed(2)} / 4 · ${L('感受也变了', 'feeling changed')} ${Math.round(s.deep * 100)}% · ${s.n} ${L('人', 'answers')}</small>`;
+    tip.style.left = Math.min(e.clientX + 16, innerWidth - 320) + 'px'; tip.style.top = (e.clientY + 14) + 'px'; tip.style.opacity = 1;
+  } else tip.style.opacity = 0;
+});
+
+const clock = new THREE.Clock();
+function frame() {
+  const t = clock.getElapsedTime();
+  U.uT.value = t; U.uIn.value = Math.min(1, t / 1.6);   // 进来时，热慢慢升起来
+  U.uHover.value = hov;
+  quad.render(renderer);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

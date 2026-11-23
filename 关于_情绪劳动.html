@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>About — Emotional Labour</title>
+<link rel="icon" href="./favicon.svg"><link rel="stylesheet" href="./css/zh.css"><script src="./js/lang.js"></script><script src="./js/grd.js"></script>
+<script type="importmap">{ "imports": {
+  "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/" } }</script>
+<!--
+  About（2026-11-23 第三版）：照 rejouice.com 首页 "We turn founders' visions…" 那一屏的排版——
+  一大段话（首行往右缩进）→ 一条细线 → 左边一句小标签、右边一小段字和一个链接。只这一屏，不多给信息。
+  进入时大段话一个词（中文一个字）一个词从下往上冒出来：每个词套一个 overflow:hidden 的框，里面的字从框底滑上来。
+  底色按我们的规矩用白底。上一版（编辑式长页）：关于_情绪劳动_编辑式_备份.html
+-->
+<style>
+@font-face { font-family: "Exposure"; src: url("./fonts/Exposure-m20.otf") format("opentype"); font-display: swap; }
+:root { --ink: #1b181d; --mute: rgba(27,24,29,.5); --line: rgba(27,24,29,.18); --pad: clamp(20px, 2.2vw, 36px); }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { background: #fff; }
+body { font-family: "Exposure", Georgia, serif; color: var(--ink); -webkit-font-smoothing: antialiased; min-height: 100vh; display: flex; flex-direction: column; }
+a { color: inherit; text-decoration: none; }
+.lang-en .zh, .lang-zh .en { display: none !important; }
+.zh { font-family: var(--zh); }
+
+header { display: flex; justify-content: space-between; align-items: flex-start; padding: var(--pad); }
+.logo { width: clamp(110px, 9vw, 140px); } .logo img { width: 100%; display: block; }
+nav { display: flex; gap: 20px; font-size: 14px; padding-top: 4px; }
+nav a { color: var(--mute); }
+body { color: var(--ink); } nav a:hover, nav a.on { color: var(--ink); }
+.lang-zh nav { font-family: var(--zh); font-weight: 330; letter-spacing: .08em; }
+
+main { flex: 1; display: flex; flex-direction: column; justify-content: center; padding: 0 var(--pad) clamp(40px, 8vh, 90px); }
+.big { font-size: clamp(30px, 4.3vw, 76px); line-height: 1.1; letter-spacing: -.015em; text-indent: 2em; max-width: 1500px; }
+.zh.big { font-weight: 330; line-height: 1.32; letter-spacing: .02em; font-size: clamp(28px, 3.7vw, 64px); }
+.big a i { text-decoration: underline; text-decoration-thickness: .06em; text-underline-offset: .12em; }
+
+/* 一个词一个框 */
+.w { display: inline-block; overflow: hidden; vertical-align: top; text-indent: 0; padding-bottom: .08em; margin-bottom: -.08em; }
+.w > i { display: inline-block; font-style: normal; transform: translateY(105%); transition: transform 1.1s cubic-bezier(.16, .8, .14, 1); }
+.go .w > i { transform: none; }
+
+.rule { height: 1px; background: var(--line); margin-top: clamp(40px, 7vh, 80px); }
+.cols { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; padding-top: 22px; font-size: 14px; line-height: 1.45; }
+.cols .r { max-width: 360px; }
+.cols .r p + p { margin-top: 1.1em; }
+.cols .r a { display: inline-block; margin-top: 1.1em; text-decoration: underline; text-underline-offset: .2em; }
+.zh.cols { font-weight: 330; letter-spacing: .05em; line-height: 1.85; font-size: 13.5px; }
+.rule, .cols { opacity: 0; transform: translateY(14px); transition: opacity .9s ease .5s, transform 1.1s cubic-bezier(.16, .8, .14, 1) .5s; }
+.go .rule, .go .cols { opacity: 1; transform: none; }
+
+
+#bg { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; z-index: -1; }
+body, nav a, .rule { transition: color .8s, background-color .8s; }
+.rule { background: var(--line); }
+@media (max-width: 760px) {  .cols { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<canvas id="bg"></canvas>
+<header>
+  <a class="logo" href="./首页.html"><img src="./logo/logo_彩虹.png" alt="In the Stratospheric Realm"></a>
+  <nav><a class="on"><span class="en">About</span><span class="zh">关于</span></a><a href="./数据_九十三种温度.html"><span class="en">Data</span><span class="zh">数据</span></a><a href="./办公桌_新布景_轮廓.html"><span class="en">Survey</span><span class="zh">问卷</span></a><a href="./热像镜子.html"><span class="en">Interact</span><span class="zh">互动</span></a></nav>
+</header>
+
+<main>
+  <p class="big en">In front of different people, we adjust what we feel and what we show. The effort rarely leaves a visible trace, and those who make it often take it for granted. This is <a href="./数据_九十三种温度.html">emotional labour</a>.</p>
+  <p class="big zh">在不同的人面前，我们会调整自己的感受，和表现出来的样子。这种付出很少留下可见的痕迹，承担者本人也往往习以为常。这就是<a href="./数据_九十三种温度.html">情绪劳动</a>。</p>
+
+  <div class="rule"></div>
+  <div class="cols en">
+    <div class="l">Emotional labour</div>
+    <div class="r"><p>Facing a supervisor, a peer, or someone close, we tune what we show to what each relationship expects.</p>
+      <p>Where little is spent, the image stays cool and dark; where much is spent, it runs hot and bright.</p>
+      <a href="./数据_九十三种温度.html">Ninety-Three Temperatures ↗</a></div>
+  </div>
+  <div class="cols zh">
+    <div class="l">情绪劳动</div>
+    <div class="r"><p>面对上级、同辈与亲近者，人们依照不同关系的期待调整情绪表达。</p>
+      <p>付出少的地方沉暗，付出多的地方热亮。</p>
+      <a href="./数据_九十三种温度.html">九十三种温度 ↗</a></div>
+  </div>
+</main>
+
+<script>
+// 把大段话拆成一个个小框：英文按词，中文按字（标点跟着前一个字，不单独落到行首）
+function split(el) {
+  const zh = el.classList.contains('zh'); let n = 0;
+  const wrap = node => {
+    if (node.nodeType === 3) {
+      const parts = zh ? node.textContent.match(/[^，。、；：！？”’）]?[，。、；：！？”’）]*/g).filter(Boolean) : node.textContent.split(/(\s+)/);
+      const f = document.createDocumentFragment();
+      parts.forEach(p => {
+        if (!p.trim()) { f.appendChild(document.createTextNode(p)); return; }
+        const w = document.createElement('span'); w.className = 'w';
+        const i = document.createElement('i'); i.textContent = p; i.style.transitionDelay = (n++ * (zh ? 0.018 : 0.03)).toFixed(3) + 's';
+        w.appendChild(i); f.appendChild(w);
+      });
+      node.replaceWith(f);
+    } else [...node.childNodes].forEach(wrap);
+  };
+  [...el.childNodes].forEach(wrap);
+}
+document.querySelectorAll('.big').forEach(split);
+// 进到眼前才冒出来（在滑动版里是滚到这一屏时）
+const go = () => requestAnimationFrame(() => requestAnimationFrame(() => document.body.classList.add('go')));
+(document.fonts ? document.fonts.ready : Promise.resolve()).then(() => {
+  const io = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting)) { go(); io.disconnect(); } }, { threshold: 0.3 });
+  io.observe(document.querySelector('main'));
+});
+
+</script>
+
+<script type="module">
+// 背景：和首页同一个"涌动"颗粒渐变（同一段着色器），三台色卡 14 秒轮换；字色按底色深浅在黑/白之间切
+import * as THREE from 'three';
+import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
+const PALS = ['front', 'mid', 'back'];
+const ramp = name => Array.from({ length: 9 }, (_, i) => { const c = TW_grdAt(name, i / 8); return new THREE.Color(c[0] / 255, c[1] / 255, c[2] / 255); });
+const canvas = document.getElementById('bg');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
+const DPR = Math.min(devicePixelRatio || 1, 1.5); renderer.setPixelRatio(DPR);
+let target = 2;
+const U = { uRes: { value: new THREE.Vector2() }, uT: { value: 0 }, uC: { value: ramp(PALS[target]) } };
+const quad = new FullScreenQuad(new THREE.ShaderMaterial({
+  uniforms: U,
+  vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec4(position.xy,0.,1.); }`,
+  fragmentShader: /* glsl */`
+    uniform vec2 uRes; uniform float uT; uniform vec3 uC[9]; varying vec2 vUv;
+    float h2(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
+    float n2(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.0-2.0*f);
+      return mix(mix(h2(i),h2(i+vec2(1,0)),f.x),mix(h2(i+vec2(0,1)),h2(i+vec2(1,1)),f.x),f.y); }
+    float fbm(vec2 p){ float s=0.0, a=0.5; mat2 r=mat2(0.8,0.6,-0.6,0.8); for(int i=0;i<4;i++){ s+=a*n2(p); p=r*p*2.02+1.7; a*=0.5; } return s/0.9375; }
+    vec3 pick(float x){ x=clamp(x,0.0,1.0)*8.0; float i=floor(x), f=x-i; vec3 a=uC[0], b=uC[0];
+      for(int k=0;k<9;k++){ if(float(k)==i) a=uC[k]; if(float(k)==min(i+1.0,8.0)) b=uC[k]; } return mix(a,b,f); }
+    void main(){
+      vec2 px = vUv*uRes; vec2 p = px/uRes.y*0.85; float t = uT*0.035;
+      vec2 q = vec2(fbm(p*0.8+vec2(0.0,t)), fbm(p*0.8+vec2(4.3,1.7)-t*0.8));
+      float v = smoothstep(0.22, 0.8, fbm(p*0.75 + 2.6*q + vec2(t*0.6,-t*0.3)));
+      v = clamp(pow(v, 0.85), 0.0, 1.0);
+      float tt = floor(uT*16.0);
+      float g = h2(floor(px/1.2) + tt*7.31) - 0.5;
+      vec3 col = pick(clamp(v + g*0.1, 0.0, 1.0));
+      col += (h2(px*0.73 + tt) - 0.5) * 0.09;
+      float sat = max(col.r, max(col.g, col.b)) - min(col.r, min(col.g, col.b));
+      col = mix(col, vec3(1.0), smoothstep(0.22, 0.62, sat) * 0.42);
+      col = mix(col, vec3(dot(col, vec3(0.3,0.59,0.11))), 0.08);
+      gl_FragColor = vec4(col, 1.0);
+    }`,
+  depthTest: false, depthWrite: false }));
+function resize() { renderer.setSize(innerWidth, innerHeight, false); U.uRes.value.set(innerWidth * DPR, innerHeight * DPR); }
+addEventListener('resize', resize); resize();
+// 字色：读大段话那块的平均亮度，深了用白字，浅了用黑字（中间留一段不动，免得闪）
+const gl = renderer.getContext(), px = new Uint8Array(4), root = document.documentElement;
+const INK = { dark: ['#1b181d', 'rgba(27,24,29,.5)', 'rgba(27,24,29,.18)'], light: ['#ffffff', 'rgba(255,255,255,.7)', 'rgba(255,255,255,.35)'] };
+let ink = 'dark';
+const logo = document.querySelector('.logo img');
+function readInk() {
+  const r = document.querySelector('main').getBoundingClientRect(); let s = 0, n = 0;
+  for (let a = 0.05; a < 1; a += 0.15) for (let b = 0.1; b < 1; b += 0.2) {
+    gl.readPixels(Math.round((r.left + r.width * a) * DPR), Math.round((innerHeight - (r.top + r.height * b)) * DPR), 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+    s += (0.3 * px[0] + 0.59 * px[1] + 0.11 * px[2]) / 255; n++; }
+  const L = s / n, k = L < 0.5 ? 'light' : L > 0.58 ? 'dark' : ink;
+  if (k !== ink) { ink = k; root.style.setProperty('--ink', INK[k][0]); root.style.setProperty('--mute', INK[k][1]); root.style.setProperty('--line', INK[k][2]);
+    logo.src = k === 'light' ? './logo/logo_彩虹_白字.png' : './logo/logo_彩虹.png'; }
+}
+const clock = new THREE.Clock(); let last = 0, held = performance.now(), lastRead = -1;
+(function frame() {
+  const t = clock.getElapsedTime(), dt = Math.min(0.05, t - last); last = t;
+  if (performance.now() - held > 14000) { held = performance.now(); target = (target + 1) % 3; }
+  const g = ramp(PALS[target]); U.uC.value.forEach((c, i) => c.lerp(g[i], Math.min(1, dt * 0.5)));
+  U.uT.value = t; quad.render(renderer);
+  if (t - lastRead > 0.4) { lastRead = t; readInk(); }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

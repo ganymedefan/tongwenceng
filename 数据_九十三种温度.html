@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ninety-Three Temperatures</title>
+<link rel="icon" href="./favicon.svg"><link rel="stylesheet" href="./css/zh.css"><script src="./js/lang.js"></script><script src="./js/grd.js"></script><script src="./js/heatTitle.js"></script>
+<!--
+  数据页（热岛 v3，2026-11-23）：形状照热岛 v1 原样（她说收圆之前那版好看得多）；
+  平时九座岛都是灰的；鼠标移到哪座岛上，它膨胀、变成那一台的 grd 颜色，并显示每一分的人数和这一题的数字。
+  没有漂浮的颗粒点、没有线和刻度。左边一栏说明（上下居中），右边是图。
+  之前的版本：数据_九十三种温度_热岛v1_备份.html（v1）、数据_九十三种温度_热力图版_备份.html
+-->
+<style>
+@font-face { font-family: "Exposure"; src: url("./fonts/Exposure-m20.otf") format("opentype"); font-display: swap; }
+:root { --ink: #1b181d; --mute: #8b868d; --pad: clamp(18px, 2.4vw, 36px); }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; background: #fff; overflow: hidden; }
+body { font-family: "Exposure", Georgia, serif; color: var(--ink); -webkit-font-smoothing: antialiased; }
+a { color: inherit; text-decoration: none; }
+canvas#c { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; }
+
+.logo { position: fixed; left: var(--pad); top: calc(var(--pad) - 4px); width: clamp(120px, 10vw, 150px); z-index: 3; }
+.logo img { width: 100%; display: block; }
+.nav { position: fixed; right: var(--pad); top: var(--pad); z-index: 3; display: flex; gap: 22px; font-size: 14px; }
+.nav a { color: var(--mute); } .nav a:hover, .nav a.on { color: var(--ink); }
+.lang-zh .nav { letter-spacing: .08em; }
+
+.lede { position: fixed; left: clamp(28px, 6vw, 110px); top: 50%; transform: translateY(-50%); z-index: 3; width: min(28vw, 400px); pointer-events: none; }
+.lede h1 { font-size: 13px; font-weight: 400; color: var(--mute); letter-spacing: .02em; margin-bottom: 12px; }
+.lede p { font-size: clamp(18px, 1.55vw, 24px); line-height: 1.32; }
+.lede small { display: block; margin-top: 14px; font-size: 12.5px; line-height: 1.6; color: var(--mute); }
+.lang-zh .lede h1 { letter-spacing: .1em; }
+.lang-zh .lede p { font-weight: 250; font-size: clamp(17px, 1.35vw, 21px); line-height: 1.9; letter-spacing: .06em; }
+.lang-zh .lede small { font-weight: 250; letter-spacing: .05em; line-height: 1.9; }
+
+.info { position: fixed; z-index: 3; pointer-events: none; opacity: 0; transition: opacity .35s; }
+.info.on { opacity: 1; }
+.info b { display: block; font-weight: 400; font-size: 15px; }
+.info .big { font-size: 40px; line-height: 1; margin: 8px 0 6px; letter-spacing: -.01em; }
+.info small { display: block; font-size: 12px; color: var(--mute); line-height: 1.6; }
+.lang-zh .info b { font-weight: 330; letter-spacing: .06em; }
+.lang-zh .info small { font-weight: 250; letter-spacing: .05em; }
+.counts { position: fixed; inset: 0; z-index: 3; pointer-events: none; }
+.counts i { position: absolute; font-style: normal; font-size: 11.5px; transform: translate(-50%, -50%); opacity: 0; transition: opacity .35s; color: rgba(27,24,29,.8); }
+.counts i.on { opacity: 0; }   /* 数字改用下面那层"字的热弥散"画，这里只留位置 */
+canvas#cnt { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 3; pointer-events: none; }
+
+.meta { margin-top: clamp(22px, 3.5vh, 36px); display: grid; grid-template-columns: 4.6em 1fr; column-gap: 14px; font-size: 12.5px; line-height: 1.6; }
+.meta dt, .meta dd { padding: 9px 0; border-top: 1px solid rgba(27,24,29,.1); }
+.meta dt { color: var(--mute); letter-spacing: .04em; }
+.meta dd b { font-weight: 400; font-variant-numeric: tabular-nums; }
+.meta dd span { display: block; color: var(--mute); }
+.lang-zh .meta { font-weight: 250; letter-spacing: .04em; }
+.lang-zh .meta dt { letter-spacing: .14em; }
+.lang-zh .meta dd b { font-weight: 380; }
+@media (max-width: 900px) { .meta { display: none; } }
+@media (max-width: 900px) { .lede { width: auto; right: var(--pad); top: auto; bottom: var(--pad); transform: none; left: var(--pad); } .nav { gap: 14px; font-size: 13px; } }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<a class="logo" href="./首页.html"><img src="./logo/logo_彩虹.png" alt="In the Stratospheric Realm"></a>
+<nav class="nav" id="nav"></nav>
+<div class="counts" id="counts"></div><canvas id="cnt"></canvas>
+<div class="info" id="info"></div>
+<div class="lede"><h1 id="h1"></h1><p id="lp"></p><dl class="meta" id="meta"></dl></div>
+
+<script type="module">
+document.getElementById('nav').innerHTML = `<a href="./关于_情绪劳动.html">${L('关于', 'About')}</a><a class="on">${L('数据', 'Data')}</a><a href="./办公桌_新布景_轮廓.html">${L('问卷', 'Survey')}</a><a href="./热像镜子.html">${L('互动', 'Interact')}</a><a href="./其他_字的热弥散.html">${L('其他', 'Other')}</a>`;
+document.getElementById('h1').textContent = L('九十三种温度', 'Ninety-Three Temperatures');
+document.getElementById('lp').textContent = L('九十三个人，九个日常时刻。', 'Ninety-three people, nine everyday moments.');
+
+document.title = L('九十三种温度', 'Ninety-Three Temperatures');
+
+const DATA = await (await fetch('./data/答卷_去标识.json')).json();
+const ARMS = ['A1', 'B1', 'C1', 'A2', 'B2', 'C2', 'A3', 'B3', 'C3'];
+const REL = { 1: L('导师或上级', 'Supervisor'), 2: L('同学或同事', 'Peer'), 3: L('很亲近的人', 'Someone close') };
+const EVT = { A: L('约好的事被改到下周', 'a plan postponed'), B: L('对方给你看他做的东西', 'they show you their work'), C: L('你有好消息，对方正不顺', 'your good news, their bad day') };
+const arms = ARMS.map(cell => {
+  const sc = DATA.map(p => p.cells[cell].score).filter(v => v != null);
+  const ac = DATA.map(p => p.cells[cell]).filter(c => c.score != null && c.score > 0).map(c => c.acting);
+  return { cell, mean: sc.reduce((a, b) => a + b, 0) / sc.length, n: sc.length, cnt: [0, 1, 2, 3, 4].map(s => sc.filter(v => v === s).length),
+    deep: ac.reduce((s, a) => s + (a === 'deep' ? 1 : a === 'unsure' ? 0.5 : 0), 0) / Math.max(1, ac.length) };
+});
+function seeded(seed) { let s = seed >>> 0; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; }
+const gauss = r => { let u = 0; while (!u) u = r(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * r()); };
+// ───── 左栏：样本、设计、测量、读法、发现（数字都从答卷算）─────
+{ const all = arms.flatMap((a, k) => DATA.map(p => p.cells[a.cell].score).filter(v => v != null));
+  const mean = all.reduce((x, y) => x + y, 0) / all.length;
+  const byRel = [1, 2, 3].map(r => { const v = arms.filter(a => +a.cell[1] === r).flatMap(a => DATA.map(p => p.cells[a.cell].score).filter(x => x != null)); return v.reduce((x, y) => x + y, 0) / v.length; });
+  const srt = [...arms].sort((a, b) => b.mean - a.mean), hi = srt[0], lo = srt[srt.length - 1];
+  const act = DATA.flatMap(p => ARMS.map(c => p.cells[c])).filter(c => c.score != null && c.score > 0);
+  const deep = act.reduce((s, c) => s + (c.acting === 'deep' ? 1 : 0), 0) / act.length;
+  const nm = a => `${REL[a.cell[1]]} · ${EVT[a.cell[0]]}`;
+  const rows = [
+    [L('样本', 'Sample'), L(`<b>${DATA.length}</b> 份答卷，每人 <b>9</b> 题，共 <b>${all.length}</b> 个回答`, `<b>${DATA.length}</b> respondents, <b>9</b> items each, <b>${all.length}</b> answers`)],
+    [L('设计', 'Design'), L('三种关系 × 三件小事 = 九个日常时刻', 'Three relationships × three small events = nine moments')],
+    [L('测量', 'Measure'), L('每题 0–4：最后表现出来的，与最初的感受隔多远', 'Each item 0–4: how far what was shown sits from what was first felt')],
+    [L('读法', 'Reading'), L('一根枝丫一个时刻；越往外，调整得越多', 'One branch per moment; the further out, the more was adjusted')],
+    [L('发现', 'Findings'), L(`总平均 <b>${mean.toFixed(2)}</b><span>上级 ${byRel[0].toFixed(2)} · 同辈 ${byRel[1].toFixed(2)} · 亲近 ${byRel[2].toFixed(2)}</span><span>最高：${nm(hi)} ${hi.mean.toFixed(2)}</span><span>最低：${nm(lo)} ${lo.mean.toFixed(2)}</span><span>有调整的回答里，${Math.round(deep * 100)}% 连感受也变了</span>`,
+      `Overall mean <b>${mean.toFixed(2)}</b><span>Supervisor ${byRel[0].toFixed(2)} · Peer ${byRel[1].toFixed(2)} · Close ${byRel[2].toFixed(2)}</span><span>Highest: ${nm(hi)} ${hi.mean.toFixed(2)}</span><span>Lowest: ${nm(lo)} ${lo.mean.toFixed(2)}</span><span>Where something was adjusted, ${Math.round(deep * 100)}% changed the feeling too</span>`)],
+  ];
+  document.getElementById('meta').innerHTML = rows.map(([t, d]) => `<dt>${t}</dt><dd>${d}</dd>`).join(''); }
+const pts = [];
+DATA.forEach(p => ARMS.forEach((cell, k) => { const c = p.cells[cell]; if (c.score == null) return; const r = seeded(p.no * 131 + k * 17);
+  pts.push({ k, st: +cell[1], s: c.score, ga: gauss(r), gr: gauss(r) }); }));
+
+// ───── WebGL ─────
+const cv = document.getElementById('c'), gl = cv.getContext('webgl', { antialias: false });
+const DPR = Math.min(devicePixelRatio || 1, 1.5);
+const sh = (t, s) => { const x = gl.createShader(t); gl.shaderSource(x, s); gl.compileShader(x); if (!gl.getShaderParameter(x, gl.COMPILE_STATUS)) console.error(gl.getShaderInfoLog(x)); return x; };
+const pr = gl.createProgram();
+gl.attachShader(pr, sh(gl.VERTEX_SHADER, 'attribute vec2 p; varying vec2 v; void main(){ v = p*0.5+0.5; gl_Position = vec4(p,0.,1.); }'));
+gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, `precision highp float; varying vec2 v;
+  uniform sampler2D uN, uF, uW, uR, uHN, uHF; uniform vec2 uRes, uCen; uniform float uRad, uT, uIn, uA, uB, uSA, uSB;
+  float h2(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
+  float n2(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.0-2.0*f); return mix(mix(h2(i),h2(i+vec2(1,0)),f.x),mix(h2(i+vec2(0,1)),h2(i+vec2(1,1)),f.x),f.y); }
+  void main(){
+    vec2 uv = vec2(v.x, 1.0 - v.y), px = uv * uRes;
+    // 热场：只用糊过的几层（所以圆润、不碎）
+    vec3 dN = texture2D(uN, uv).rgb, dF = texture2D(uF, uv).rgb, dW = texture2D(uW, uv).rgb;   // 画布贴图是从上往下的
+    float wob = n2(px*0.01 + vec2(uT*0.2, -uT*0.15)) - 0.5;
+    float wob2 = n2(px*0.035 + vec2(-uT*0.3, uT*0.22)) - 0.5;
+    vec3 dd = (dN*0.7 + dF*1.0 + dW*1.5) * (1.0 + wob*0.25);
+    float th = 0.42;
+    // 移上去的那根枝丫自己的热场（R=现在这根，G=刚离开、正在退的那根）：只有它自己的形状有反应
+    vec2 hn = texture2D(uHN, uv).rg, hf = texture2D(uHF, uv).rg;
+    vec2 own = (hn*1.7 + hf*1.5) * uIn * (1.0 + wob*0.25);
+    float gA = uA * smoothstep(th - 0.03, th + 0.12, own.x), gB = uB * smoothstep(th - 0.03, th + 0.12, own.y);
+    float gx = max(uA * smoothstep(th*0.35, th, own.x), uB * smoothstep(th*0.35, th, own.y));   // 膨胀的范围（比形状略大）
+    float g = max(gA, gB);
+    float tot = (dd.r + dd.g + dd.b) * uIn * (1.0 + 0.35*gx);          // 移上去：膨胀
+    float field = tot + wob*0.10 + wob2*0.05;
+    float inside = smoothstep(th - 0.012, th + 0.012, field);
+    float depth = clamp((field - th) / 1.3, 0.0, 1.0);
+    vec3 gray = mix(vec3(0.905, 0.9, 0.905), vec3(0.78, 0.77, 0.79), pow(depth, 0.7));
+    vec3 w = dd / max(dd.r + dd.g + dd.b, 1e-4);
+    float xr = 0.08 + 0.9 * pow(depth, 0.7);
+    float xa = 0.08 + 0.9 * pow(clamp((own.x*(1.0+0.35*gx) - th) / 1.1, 0.0, 1.0), 0.7);
+    float xb = 0.08 + 0.9 * pow(clamp((own.y*(1.0+0.35*gx) - th) / 1.1, 0.0, 1.0), 0.7);
+    vec3 col = mix(mix(gray, texture2D(uR, vec2(xb, uSB)).rgb, gB), texture2D(uR, vec2(xa, uSA)).rgb, gA);
+    vec3 cold = mix(texture2D(uR, vec2(0.0, uSB)).rgb, texture2D(uR, vec2(0.0, uSA)).rgb, uA / max(uA + uB, 1e-4));
+    float gh = max(uA * smoothstep(th*0.25, th*0.8, own.x), uB * smoothstep(th*0.25, th*0.8, own.y));
+    float halo = exp(-max(th - field, 0.0) * 9.0) * (1.0 - inside) * 0.35 * smoothstep(0.0, 0.05, tot);
+    vec3 outC = mix(vec3(1.0), mix(vec3(0.92, 0.915, 0.92), cold, gh), halo);
+    gl_FragColor = vec4(mix(outC, col, inside), 1.0);
+  }`));
+gl.linkProgram(pr); gl.useProgram(pr);
+gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer()); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+const al = gl.getAttribLocation(pr, 'p'); gl.enableVertexAttribArray(al); gl.vertexAttribPointer(al, 2, gl.FLOAT, false, 0, 0);
+const U = n => gl.getUniformLocation(pr, n);
+const mkTex = (unit, name) => { const t = gl.createTexture(); gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, t);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.uniform1i(U(name), unit); return t; };
+const tN = mkTex(0, 'uN'), tF = mkTex(1, 'uF'), tW = mkTex(2, 'uW'), tR = mkTex(3, 'uR'), tHN = mkTex(4, 'uHN'), tHF = mkTex(5, 'uHF');
+(() => { const N = 128, c = document.createElement('canvas'); c.width = N; c.height = 3; const x = c.getContext('2d'), id = x.createImageData(N, 3);
+  ['front', 'mid', 'back'].forEach((n, r) => TW_grdStrip(n, N).forEach((col, i) => id.data.set([col[0], col[1], col[2], 255], (r * N + i) * 4))); x.putImageData(id, 0, 0);
+  gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, tR); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, c); })();
+const put = (unit, t, src) => { gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, t); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src); };
+
+// 布局 + 热场贴图
+let geo = null, own = [], pos = [], ownScale = 0.5;
+let cur = -1, prev = -1, A = 0, B = 0;
+// 把现在这根（R）和正在退的那根（G）拼进两张贴图
+function upload() {
+  if (!own.length) return;
+  [['n', 4, () => tHN], ['f', 5, () => tHF]].forEach(([key, unit, tex]) => {
+    const ref = own[0][key], out = new Uint8Array(ref.w * ref.h * 4), a = cur >= 0 ? own[cur][key].d : null, b = prev >= 0 ? own[prev][key].d : null;
+    for (let i = 0; i < ref.w * ref.h; i++) { out[i * 4] = a ? a[i] : 0; out[i * 4 + 1] = b ? b[i] : 0; out[i * 4 + 3] = 255; }
+    gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, tex()); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, ref.w, ref.h, 0, gl.RGBA, gl.UNSIGNED_BYTE, out); });
+  gl.uniform1f(U('uSA'), cur >= 0 ? [1, 3, 5][+arms[cur].cell[1] - 1] / 6 : 0.5);
+  gl.uniform1f(U('uSB'), prev >= 0 ? [1, 3, 5][+arms[prev].cell[1] - 1] / 6 : 0.5);
+}
+// 鼠标下面是哪根枝丫：看每根自己的热场在这一点有多热，取最热的（够热才算）
+function armAt(mx, my) {
+  if (!own.length) return -1;
+  let best = -1, bv = 0;
+  own.forEach((o, k) => { const v = ['n', 'f'].reduce((s, key, j) => { const t = o[key], x = Math.min(t.w - 1, Math.max(0, Math.floor(mx * ownScale * t.w / (innerWidth * ownScale)))), y = Math.min(t.h - 1, Math.max(0, Math.floor(my * t.h / innerHeight)));
+      return s + t.d[y * t.w + x] / 255 * (j ? 1.5 : 1.7); }, 0);
+    if (v > bv) { bv = v; best = k; } });
+  return bv > 0.3 ? best : -1;
+}
+const countsEl = document.getElementById('counts');
+function build() {
+  const W = innerWidth, H = innerHeight, narrow = W < 900;
+  cv.width = W * DPR; cv.height = H * DPR; gl.viewport(0, 0, cv.width, cv.height);
+  const R = Math.min(narrow ? W * 0.38 : W * 0.25, H * 0.36);
+  const CX = narrow ? W / 2 : Math.max(W * 0.66, Math.min(W * 0.28, 400) + Math.min(W * 0.06, 110) + 60 + R * 1.25), CY = narrow ? H * 0.42 : H * 0.52;
+  geo = { R, CX, CY };
+  const sc = 0.5, cw = Math.round(W * sc), ch = Math.round(H * sc);
+  const mk = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
+  const heat = mk(cw, ch), hx = heat.getContext('2d'); hx.fillStyle = '#000'; hx.fillRect(0, 0, cw, ch); hx.globalCompositeOperation = 'lighter';
+  const rad = R * 0.11 * sc;
+  pos = [];
+  pts.forEach(p => {
+    const ang = -Math.PI / 2 + p.k * (Math.PI * 2 / 9) + p.ga * (0.06 + 0.07 * p.s / 4);
+    const rr = R * (0.05 + 0.88 * p.s / 4) + p.gr * R * 0.06;
+    const x = (CX + Math.cos(ang) * rr) * sc, y = (CY + Math.sin(ang) * rr) * sc;
+    const v = Math.round(70 * (0.06 + 0.94 * Math.pow(p.s / 4, 1.2)));
+    pos.push([x, y, v]);
+    const col = p.st === 1 ? `${v},0,0` : p.st === 2 ? `0,${v},0` : `0,0,${v}`;
+    const g = hx.createRadialGradient(x, y, 0, x, y, rad); g.addColorStop(0, `rgba(${col},1)`); g.addColorStop(1, 'rgba(0,0,0,0)');
+    hx.fillStyle = g; hx.fillRect(x - rad, y - rad, rad * 2, rad * 2);
+  });
+  const down = (src, k) => { const c = mk(Math.max(8, Math.round(src.width / k)), Math.max(8, Math.round(src.height / k))); const g = c.getContext('2d'); g.imageSmoothingQuality = 'high'; g.drawImage(src, 0, 0, c.width, c.height); return c; };
+  const N = down(down(heat, 2), 2), F = down(down(N, 2), 3);
+  put(0, tN, heat); put(1, tF, N); put(2, tW, F);   // 和 v1 一样：清楚的一层 + 两层糊的
+  // 每根枝丫自己的热场
+  own = arms.map((a, k) => {
+    const c = mk(cw, ch), x = c.getContext('2d'); x.fillStyle = '#000'; x.fillRect(0, 0, cw, ch); x.globalCompositeOperation = 'lighter';
+    pts.forEach((p, i) => { if (p.k !== k) return; const [px, py, v] = pos[i];
+      const g = x.createRadialGradient(px, py, 0, px, py, rad); g.addColorStop(0, `rgba(${v},0,0,1)`); g.addColorStop(1, 'rgba(0,0,0,0)');
+      x.fillStyle = g; x.fillRect(px - rad, py - rad, rad * 2, rad * 2); });
+    const n = down(down(c, 2), 2), f = down(down(n, 2), 3);
+    const red = cv2 => { const d = cv2.getContext('2d').getImageData(0, 0, cv2.width, cv2.height).data, o = new Uint8Array(cv2.width * cv2.height); for (let i = 0; i < o.length; i++) o[i] = d[i * 4]; return { w: cv2.width, h: cv2.height, d: o }; };
+    return { n: red(n), f: red(f) };
+  });
+  ownScale = sc; upload();
+  gl.useProgram(pr); gl.uniform2f(U('uRes'), W, H); gl.uniform2f(U('uCen'), CX, CY); gl.uniform1f(U('uRad'), R);
+  // 每座岛每一分的人数，放在那一分的位置上
+  countsEl.innerHTML = arms.map((a, k) => a.cnt.map((c, s) => { const ang = -Math.PI / 2 + k * (Math.PI * 2 / 9), rr = R * (0.05 + 0.88 * s / 4);
+    return `<i data-k="${k}" style="left:${CX + Math.cos(ang) * rr}px;top:${CY + Math.sin(ang) * rr}px">${c || ''}</i>`; }).join('')).join('');
+}
+addEventListener('resize', build); build();
+
+// 移上去：哪座岛
+const info = document.getElementById('info'), G = new Float32Array(9);
+// 岛里每一分的人数：用"字的热弥散"画（颜色跟这根枝丫那一台的渐变）
+const cntFx = heatField(document.getElementById('cnt'));
+const STG = ['front', 'mid', 'back'];
+function showCounts(k) {
+  if (k < 0) { cntFx.set([]); return; }
+  const items = [...countsEl.children].filter(el => +el.dataset.k === k && el.textContent).map(el => ({ x: parseFloat(el.style.left), y: parseFloat(el.style.top), text: el.textContent, size: 22 }));
+  cntFx.set(items, STG[+arms[k].cell[1] - 1]);
+}
+let hov = -1;
+addEventListener('pointermove', e => {
+  const k = armAt(e.clientX, e.clientY);
+  if (k === hov) return; hov = k;
+  if (k >= 0 && k !== cur) { if (cur >= 0 && A > 0.05) { prev = cur; B = A; } cur = k; A = 0; upload(); }
+  [...countsEl.children].forEach(el => el.classList.toggle('on', +el.dataset.k === k)); showCounts(k);
+  if (k < 0) { info.classList.remove('on'); return; }
+  const a = arms[k], ang = -Math.PI / 2 + k * (Math.PI * 2 / 9), lr = geo.R * 1.24, x = geo.CX + Math.cos(ang) * lr, y = geo.CY + Math.sin(ang) * lr, c = Math.cos(ang);
+  info.innerHTML = `<b>${REL[a.cell[1]]}</b><small>${EVT[a.cell[0]]}</small><div class="big">${a.mean.toFixed(2)}</div><small>${L('平均（0–4）', 'mean (0–4)')} · ${a.n} ${L('人', 'answers')} · ${L('感受也变了', 'feeling changed')} ${Math.round(a.deep * 100)}%</small>`;
+  info.style.left = x + 'px'; info.style.top = y + 'px';
+  info.style.textAlign = Math.abs(c) < 0.3 ? 'center' : c > 0 ? 'left' : 'right';
+  info.style.transform = `translate(${Math.abs(c) < 0.3 ? '-50%' : c > 0 ? '0' : '-100%'}, -50%)`;
+  info.classList.add('on');
+  const r = info.getBoundingClientRect(), m = 16;                       // 别出屏幕
+  if (r.right > innerWidth - m) info.style.left = (x - (r.right - innerWidth + m)) + 'px';
+  if (r.left < m) info.style.left = (x + (m - r.left)) + 'px';
+});
+
+const t0 = performance.now();
+(function frame() {
+  const t = (performance.now() - t0) / 1000;
+  A += ((hov >= 0 && hov === cur ? 1 : 0) - A) * 0.1; B += (0 - B) * 0.1;
+  gl.uniform1f(U('uA'), A); gl.uniform1f(U('uB'), B); gl.uniform1f(U('uT'), t); gl.uniform1f(U('uIn'), Math.min(1, t / 1.4));
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

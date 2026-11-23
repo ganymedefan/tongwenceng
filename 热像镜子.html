@@ -1,0 +1,404 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>热像镜子</title>
+<link rel="icon" href="./favicon.svg"><link rel="stylesheet" href="./css/zh.css"><script src="./js/lang.js"></script><script src="./js/progress.js"></script>
+<script type="importmap">{ "imports": {
+  "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/" } }</script>
+<style>
+@font-face { font-family: "TWC Sans"; src: url("./fonts/noto-sans-sc-vf.woff2") format("woff2-variations"); font-weight: 100 900; font-display: swap; }
+@font-face { font-family: "Exposure"; src: url("./fonts/Exposure-m20.otf") format("opentype"); font-display: swap; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; background: #EB83B0; }
+body { font-family: "TWC Sans", "PingFang SC", sans-serif; color: #16121a; -webkit-font-smoothing: antialiased; }
+canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; }
+
+/* 读数：压在画面左下，很少的字 */
+.read { position: fixed; left: clamp(16px, 3vw, 44px); bottom: clamp(16px, 3.4vh, 40px); z-index: 2; pointer-events: none; }
+#ov { z-index: 1; pointer-events: none; }
+.read .n { font-family: "Exposure", serif; font-size: clamp(72px, 11vw, 190px); line-height: .82; letter-spacing: -.03em; }
+.read .n small { font-size: .32em; letter-spacing: 0; margin-left: .12em; }
+.read .t { margin-top: 14px; font-size: 13px; line-height: 1.7; letter-spacing: .06em; font-weight: 500; }
+
+/* 换一位受访者（右下，很小） */
+.who { position: fixed; right: clamp(16px, 3vw, 44px); bottom: clamp(16px, 3.4vh, 40px); z-index: 2; display: flex; gap: 14px; align-items: baseline;
+  font-family: "Exposure", serif; font-size: 18px; letter-spacing: .01em; mix-blend-mode: multiply; }
+.who button { all: unset; cursor: pointer; font-size: 18px; padding: 4px 2px; opacity: .7; }
+.who button:hover { opacity: 1; }
+.who small { font-family: "TWC Sans", sans-serif; font-size: 11px; letter-spacing: .1em; margin-left: 8px; }
+.cam { position: fixed; right: clamp(16px, 3vw, 44px); top: clamp(16px, 3.4vh, 40px); z-index: 2; font-size: 12px; letter-spacing: .06em;
+  background: none; border: 0; border-bottom: 1px solid currentColor; color: #16121a; cursor: pointer; font-family: inherit; padding: 2px 0; }
+.note { position: fixed; left: clamp(16px, 3vw, 44px); top: clamp(16px, 3.4vh, 40px); z-index: 2; font-size: 12px; letter-spacing: .06em; opacity: .7; }
+/* 没答完：上锁 */
+.lock { position: fixed; inset: 0; z-index: 5; display: none; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 0 24px; }
+.lock.on { display: flex; }
+.lock em { font-style: normal; font-size: 13px; letter-spacing: .08em; color: rgba(27,24,29,.55); margin-bottom: 18px; }
+.lang-zh .lock em { font-family: var(--zh); font-weight: 330; letter-spacing: .16em; }
+.lock p { font-family: "Exposure", Georgia, serif; font-size: clamp(26px, 3vw, 44px); line-height: 1.25; color: #1b181d; max-width: 16em; }
+.lock small { display: block; margin-top: 14px; font-size: 13px; color: rgba(27,24,29,.6); letter-spacing: .04em; }
+.lock a { display: inline-block; margin-top: 30px; font-size: 15px; padding: 12px 22px; border-radius: 999px; background: #1b181d; color: #fff; text-decoration: none; cursor: pointer; }
+.lang-zh .lock p { font-family: var(--zh); font-weight: 330; letter-spacing: .06em; line-height: 1.6; max-width: 22em; }
+.lang-zh .lock small, .lang-zh .lock a { font-family: var(--zh); font-weight: 330; letter-spacing: .1em; }
+/* 答完以后：回顾 · 重新答题 */
+.mine { position: fixed; right: clamp(16px, 3vw, 44px); bottom: clamp(16px, 3.4vh, 40px); z-index: 4; display: none; gap: 10px; font-size: 13px; color: #1b181d; mix-blend-mode: multiply; }
+.mine.on { display: flex; }
+.mine a { cursor: pointer; border-bottom: 1px solid currentColor; }
+.lang-zh .mine { font-family: var(--zh); font-weight: 330; letter-spacing: .08em; }
+.review { position: fixed; inset: 0; z-index: 6; background: rgba(255,255,255,.96); display: none; overflow: auto; }
+.review.on { display: block; }
+.review .rin { max-width: 760px; margin: 0 auto; padding: clamp(40px, 9vh, 100px) 24px 80px; }
+.review header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 36px; }
+.review h2 { font-family: "Exposure", Georgia, serif; font-weight: 400; font-size: clamp(28px, 3vw, 44px); }
+.review #rvx { font-size: 28px; cursor: pointer; color: #1b181d; text-decoration: none; }
+.review ol { list-style: none; }
+.review li { border-top: 1px solid #ebe8ea; padding: 18px 0; display: grid; grid-template-columns: 9em 1fr auto; gap: 18px; align-items: baseline; cursor: pointer; }
+.review li:hover { background: #faf8f9; }
+.review li .k { font-size: 13px; color: rgba(27,24,29,.55); }
+.review li .a { font-size: 16px; line-height: 1.55; color: #1b181d; }
+.review li .a small { display: block; font-size: 13px; color: rgba(27,24,29,.55); margin-top: 4px; }
+.review li .g { font-size: 13px; color: rgba(27,24,29,.55); white-space: nowrap; }
+.lang-zh .review { font-family: var(--zh); }
+.lang-zh .review h2 { font-family: var(--zh); font-weight: 330; letter-spacing: .06em; }
+.lang-zh .review li .a { font-weight: 250; letter-spacing: .05em; line-height: 1.9; }
+.lang-zh .review li .k, .lang-zh .review li .g { font-weight: 330; letter-spacing: .06em; }
+@media (max-width: 700px) { .review li { grid-template-columns: 1fr; gap: 6px; } }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<canvas id="ov"></canvas>
+<div class="read"><div class="n" id="num"></div></div>
+<div class="lock" id="lock"><em id="lk0"></em><p id="lk1"></p><small id="lk2"></small><a id="lk3"></a></div>
+<nav class="mine" id="mineNav"><a id="rv"></a><span>·</span><a id="redo"></a></nav>
+<div class="review" id="review"><div class="rin"><header><h2 id="rvh"></h2><a id="rvx">×</a></header><ol id="rvl"></ol></div></div>
+
+
+<script type="module">
+/*
+  热像镜子：答完九题以后，用摄像头照自己，画面按"自己的综合数据"变成热像。
+  参考：OpenProcessing · davepagurek（摄像头 → 模糊 → 按亮度映射到几个颜色），
+        Brik · Thermal Camera（Rotem Batito：大晕染、颗粒、动的地方更亮）。
+  颜色和热度不是自己定的，直接照 20.2 映射工具（score-mapping.js，11-22 版）：
+    综合分 = 9 题平均；<4/3 用后台色卡，4/3–8/3 中台色卡，>8/3 前台色卡（硬分界）
+    前台/中台：t = clip(0.10 + p^1.15 × 0.80 + (分数-2) × 0.07)；后台：冷区固定、热区随分数扩大变亮
+    深层占比 → 边缘晕开多少（表层清楚，深层融进背景）
+    颗粒：幅度 0.2 → 0.8、速度 0.7 → 2.2，随分数线性变化
+  答案从本机 localStorage 的 tw_answers_v2 读（{A1:{score,acting},…}）；没有就用右下角示例滑杆，或网址 ?s=2.8&d=0.4。
+*/
+import * as THREE from 'three';
+import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
+
+// ───── 映射规则：照抄 20.2 score-mapping.js ─────
+const clamp = (x, a, b) => Math.max(a, Math.min(b, x)), cl = x => clamp(x, 0, 1), lerp = (a, b, t) => a + (b - a) * t;
+const rgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+const samp = (cols, t) => { t = cl(t); const p = t * (cols.length - 1), k = Math.min(cols.length - 2, Math.floor(p)), f = p - k, a = rgb(cols[k]), b = rgb(cols[k + 1]); return a.map((v, i) => v + (b[i] - v) * f); };
+const N = 41;
+const RULE = { grain: { amount: [0.2, 0.8], speed: [0.7, 2.2] }, cuts: [4 / 3, 8 / 3], noAdjustDeep: 0, unsureDeep: 0.5 };
+const STAGES = {
+  front: { label: '前台色', bg: '#EB83B0', colors: ['#EB83B0', '#EB7CA5', '#EB759B', '#EB6E90', '#EB6686', '#EA5F7B', '#EA5871', '#EA5166', '#EA4A5C', '#EA4351', '#E93E5B', '#E63A72', '#EC4675', '#FB6264', '#FE766F', '#FD8883', '#FC9997', '#FBABAC', '#FBB2B4', '#FBB2B4', '#FBB2B4'] },
+  mid: { label: '中台色', bg: '#696FE1', colors: ['#696FE1', '#7C6DC7', '#8F6BAD', '#A26893', '#B56679', '#C8645F', '#DB6245', '#EB6232', '#ED6B36', '#EF743A', '#F27E3D', '#F48741', '#F79045', '#F99949', '#FCA24D', '#FEAB50', '#FBB95B', '#F5CB69', '#EEDC78', '#E8EE87', '#E3FA91'] },
+  back: { label: '后台色', bg: '#C1E1D4',
+    cool: ['#C1E1D4', '#B9D6D8', '#B1CCDB', '#A9C1DE', '#A2B7E0', '#9AACE2', '#93A1E4', '#8D95E6', '#868AE7'],
+    hot: ['#868AE7', '#929ADE', '#9FA9D4', '#ADB8CA', '#BBC6BD', '#CAD4AF', '#DAE19F', '#EAEE8B', '#FAFB71'], reach: [0.30, 0.475, 0.70, 0.88, 1.0] },
+};
+const formulaColors = (colors, s) => Array.from({ length: N }, (_, i) => samp(colors, cl(0.10 + Math.pow(i / (N - 1), 1.15) * 0.80 + (s - 2) * 0.07)));
+function backColors(s) {
+  const B = STAGES.back, u = clamp(s, 0, 4) / 4, sp = lerp(0.60, 0.40, u);
+  const p = u * 4, k = Math.min(3, Math.floor(p)), reach = lerp(B.reach[k], B.reach[k + 1], p - k);
+  return Array.from({ length: N }, (_, i) => {
+    const v = i / (N - 1), c = samp(B.cool, v / sp), h = samp(B.hot, cl((v - sp) / (1 - sp)) * reach);
+    const q = cl((v - (sp - 0.05)) / 0.1), sm = q * q * (3 - 2 * q);
+    return c.map((x, j) => x + (h[j] - x) * sm);
+  });
+}
+function overallPlan(s) {
+  const [c1, c2] = RULE.cuts, e = 1e-9;
+  if (s < c1 - e) return { id: 'back', colors: backColors(s) };
+  if (s <= c2 + e) return { id: 'mid', colors: formulaColors(STAGES.mid.colors, s) };
+  return { id: 'front', colors: formulaColors(STAGES.front.colors, s) };
+}
+const deepOf = (score, acting) => score == null ? null : score === 0 ? RULE.noAdjustDeep : acting === 'deep' ? 1 : acting === 'surface' ? 0 : RULE.unsureDeep;
+const mean = a => { const v = a.filter(x => x != null); return v.length ? v.reduce((x, y) => x + y, 0) / v.length : null; };
+
+// ───── 读数据 ─────
+// 先看本机有没有自己刚答完的（tw_answers_v2）；再用问卷星 93 份真实答卷（data/答卷_去标识.json，只有编号、身份、九题）
+const Q = new URLSearchParams(location.search);
+const WHO = { STUDENT: 'STUDENT', EMPLOYED: 'EMPLOYED', OTHER: 'OTHER' };
+const summarize = cells => { const v = Object.values(cells), s = mean(v.map(c => c.score));
+  return s == null ? null : { s, d: mean(v.map(c => deepOf(c.score, c.acting))) ?? 0, n: v.filter(c => c.score != null).length }; };
+let people = [];
+try { people = await (await fetch('./data/答卷_去标识.json')).json(); } catch (e) {}
+let mine = null;
+const PROG = TW_progress();
+if (PROG.complete) mine = summarize(PROG.a);
+// 没答完不能看自己的温度（只有带 ?demo 的演示链接可以看样本里的人）
+const LOCKED = !PROG.complete && !(Q.has('demo') && (Q.has('no') || Q.has('s')));
+let idx = Math.max(0, people.findIndex(p => p.no === +(Q.get('no') || 63)));
+let data, label;
+function choose() {
+  if (Q.has('s')) { data = { s: clamp(+Q.get('s'), 0, 4), d: cl(+(Q.get('d') ?? 0.3)), n: 9 }; label = '试看'; return; }
+  if (mine && idx < 0) { data = mine; label = '你'; return; }
+  const p = people[idx]; data = summarize(p.cells); label = `Subject NO.${p.no}<small>${WHO[p.who]}</small>`;
+}
+if (mine && !(Q.has('demo') && Q.has('no'))) idx = -1;   // 答完了就看自己的；演示链接才看样本里的人
+choose();
+
+// ───── 画布 ─────
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
+const DPR = Math.min(devicePixelRatio || 1, 1.5); renderer.setPixelRatio(DPR);
+const ramp = new THREE.DataTexture(new Uint8Array(N * 4), N, 1, THREE.RGBAFormat); ramp.magFilter = ramp.minFilter = THREE.LinearFilter;
+const mkRT = (w, h) => new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter });
+
+// 来源：摄像头；没有摄像头就放一段真人演示视频（video/演示_真人_mixkit4815.mp4，Mixkit 免费素材；换别的视频直接改这一行）
+const video = document.createElement('video'); video.muted = true; video.playsInline = true;
+const demoVid = document.createElement('video'); demoVid.muted = true; demoVid.playsInline = true; demoVid.loop = true;
+demoVid.src = './video/演示_两人咖啡馆_mixkit253.mp4';   // 两个人在咖啡馆里一起看电脑（换掉了单人长发正脸那段） demoVid.play().catch(() => {});
+addEventListener('pointerdown', () => demoVid.play().catch(() => {}), { once: true });
+let src = new THREE.VideoTexture(demoVid), usingCam = false;
+function drawFake() {}
+const note = {}, camBtn = { hidden: true, addEventListener() {} };
+async function startCam() {
+  try {
+    const st = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480, facingMode: 'user' }, audio: false });
+    video.srcObject = st; await video.play();
+    src = new THREE.VideoTexture(video); usingCam = true; camBtn.hidden = true; note.textContent = '';
+    passSmall.material.uniforms.uSrc.value = src;
+  } catch (e) { camBtn.hidden = false; note.textContent = '没有摄像头：先放一段演示视频'; }
+}
+
+// 第一步：缩小到很小的图（自然就模糊了）。表层缩得少（边清楚），深层缩得多（边晕开）
+const passSmall = new FullScreenQuad(new THREE.ShaderMaterial({
+  uniforms: { uSrc: { value: src }, uAspect: { value: 1 }, uSrcAspect: { value: 4 / 3 }, uFoot: { value: new THREE.Vector2(0.01, 0.01) }, uMask: { value: null }, uHasMask: { value: 0 } },
+  vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec4(position.xy,0.,1.); }`,
+  fragmentShader: `uniform sampler2D uSrc, uMask; uniform float uAspect, uSrcAspect, uHasMask; uniform vec2 uFoot; varying vec2 vUv;
+    void main(){ float acc = 0.0, msk = 0.0;
+      for(int i=0;i<4;i++) for(int j=0;j<4;j++){                         // 一格里取 16 个点平均，把原画面的网点、噪点抹平
+        vec2 uv = vUv + (vec2(float(i),float(j))/3.0-0.5)*uFoot; uv.x = 1.0-uv.x;   // 镜子
+        float r = uAspect/uSrcAspect; if(r>1.0) uv.y = 0.5+(uv.y-0.5)/r; else uv.x = 0.5+(uv.x-0.5)*r;   // 铺满
+        acc += dot(texture2D(uSrc, uv).rgb, vec3(0.3,0.59,0.11));
+        msk += uHasMask > 0.5 ? texture2D(uMask, vec2(uv.x, 1.0-uv.y)).r : 1.0; }   // 人像分割：人 = 1，背景 = 0
+      gl_FragColor = vec4(acc/16.0, msk/16.0, 0.0, 1.0); }` }));
+// 第二步：热的余温——动过的地方留一会儿热（Brik 的"动的地方更亮"）
+const passHeat = new FullScreenQuad(new THREE.ShaderMaterial({
+  uniforms: { uNow: { value: null }, uPrev: { value: null }, uDecay: { value: 0.86 } },
+  vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec4(position.xy,0.,1.); }`,
+  fragmentShader: `uniform sampler2D uNow, uPrev; uniform float uDecay; varying vec2 vUv;
+    void main(){ float now = texture2D(uNow, vUv).r; vec2 p = texture2D(uPrev, vUv).rg;
+      float m = smoothstep(0.01, 0.08, abs(now - p.g));
+      gl_FragColor = vec4(max(p.r*uDecay, m), now, 0.0, 1.0); }` }));
+// 第三步：上色 + 颗粒
+const U = {
+  uLum: { value: null }, uHeat: { value: null }, uRamp: { value: ramp }, uRes: { value: new THREE.Vector2() }, uT: { value: 0 },
+  uGrain: { value: 0.5 }, uLo: { value: 0.06 }, uHi: { value: 0.78 }, uSpeed: { value: 1.4 }, uEdge: { value: 0.3 }, uOpen: { value: 0 }, uTiny: { value: null }, uTinyTexel: { value: new THREE.Vector2(1 / 32, 1 / 18) }, uTexel: { value: new THREE.Vector2() }, uMotion: { value: 0.35 },
+};
+const passColor = new FullScreenQuad(new THREE.ShaderMaterial({
+  uniforms: U,
+  vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec4(position.xy,0.,1.); }`,
+  fragmentShader: /* glsl */`
+    uniform sampler2D uLum, uHeat, uRamp, uTiny; uniform vec2 uTinyTexel; uniform vec2 uRes, uTexel; uniform float uT, uGrain, uSpeed, uEdge, uMotion, uLo, uHi, uOpen;
+    varying vec2 vUv;
+    float h2(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
+    float blur(sampler2D t, vec2 uv, float r){       // 9 点柔化，r 是格数
+      float s = 0.0; float w = 0.0;
+      for(int i=-1;i<=1;i++) for(int j=-1;j<=1;j++){ float k = (i==0&&j==0)?2.0:1.0; s += texture2D(t, uv+vec2(i,j)*uTexel*r).r*k; w += k; }
+      return s/w; }
+    vec2 bigBlur(vec2 uv, float r){                  // 没点进去时的大糊：两圈 16 个点，r 是格数
+      vec2 s = texture2D(uTiny, uv).rg*2.0; float w = 2.0;      // 在一张很小的缩略图上糊，所以是整片色块
+      for(int i=0;i<8;i++){ float a = float(i)*0.785398 + 0.39;
+        vec2 d = vec2(cos(a), sin(a))*uTinyTexel;
+        s += texture2D(uTiny, uv + d*r*0.5).rg*1.5 + texture2D(uTiny, uv + d*r).rg; w += 2.5; }
+      return s/w; }
+    void main(){
+      float closed = 1.0 - uOpen;
+      float lum = blur(uLum, vUv, 1.0 + uEdge*2.5);
+      vec2 far = bigBlur(vUv, 1.6);
+      float person = 0.0; float pw = 0.0;
+      for(int i=-2;i<=2;i++) for(int j=-2;j<=2;j++){ person += texture2D(uLum, vUv+vec2(i,j)*uTexel*(0.8+uEdge*2.6)).g; pw += 1.0; }
+      person = smoothstep(0.15, 0.85, person/pw);
+      lum = mix(lum, far.r, closed); person = mix(person, smoothstep(0.05, 0.9, far.g), closed);   // 没点进去：人和背景都糊成一片
+      float heat = blur(uHeat, vUv, 2.0 + uEdge*3.0);
+      float v = smoothstep(uLo, uHi, lum);           // 亮度 → 0..1（和 OpenProcessing 那个一样按亮度走）
+      v = clamp(v + heat*uMotion*uOpen, 0.0, 1.0);     // 动的地方再热一点（点进去以后才有）
+      v = mix(v*0.42, v, person);                      // 景还在，只是冷下去；人最热
+      // 颗粒：分数越高越多、越快；颗粒抖的是"取哪一档颜色"，所以档与档之间是颗粒过渡
+      float tt = floor(uT*20.0*uSpeed);
+      float g = h2(floor(gl_FragCoord.xy/1.5) + tt*1.37) - 0.5;
+      v = clamp(v + g*uGrain*0.22, 0.0, 1.0);
+      vec3 col = texture2D(uRamp, vec2(v*(40.0/41.0)+0.5/41.0, 0.5)).rgb;
+      col += (h2(gl_FragCoord.xy*0.71 + tt) - 0.5)*0.035*uGrain;
+      gl_FragColor = vec4(col, 1.0);
+    }` }));
+
+let rtS, rtH = [null, null], hi = 0, scale = 6;
+const rtTiny = mkRT(32, 18);
+const passCopy = new FullScreenQuad(new THREE.ShaderMaterial({ uniforms: { uT: { value: null } }, vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec4(position.xy,0.,1.); }`, fragmentShader: `uniform sampler2D uT; varying vec2 vUv; void main(){ gl_FragColor = texture2D(uT, vUv); }` }));
+function sizeRTs() {
+  const pw = Math.floor(innerWidth * DPR), ph = Math.floor(innerHeight * DPR);
+  renderer.setSize(innerWidth, innerHeight, false); U.uRes.value.set(pw, ph);
+  const w = Math.max(32, Math.round(pw / scale)), h = Math.max(24, Math.round(ph / scale));
+  [rtS, rtH[0], rtH[1]].forEach(r => r && r.dispose());
+  rtS = mkRT(w, h); rtH = [mkRT(w, h), mkRT(w, h)];
+  U.uTexel.value.set(1 / w, 1 / h);
+  passSmall.material.uniforms.uFoot.value.set(1 / w, 1 / h);
+  passSmall.material.uniforms.uAspect.value = pw / ph;
+}
+
+// ───── 把数据变成参数 ─────
+const num = document.getElementById('num'), tx = {};
+function apply() {
+  const s = data.s, d = data.d, u = s / 4, P = overallPlan(s);
+  const a = ramp.image.data; P.colors.forEach((c, i) => { a[i * 4] = c[0]; a[i * 4 + 1] = c[1]; a[i * 4 + 2] = c[2]; a[i * 4 + 3] = 255; }); ramp.needsUpdate = true;
+  U.uGrain.value = lerp(RULE.grain.amount[0], RULE.grain.amount[1], u);
+  U.uSpeed.value = lerp(RULE.grain.speed[0], RULE.grain.speed[1], u);
+  U.uEdge.value = d;
+  U.uMotion.value = lerp(0.2, 0.55, u);
+  const ns = Math.round(lerp(7, 13, d));               // 深层越多，缩得越小，边越散
+  if (ns !== scale) { scale = ns; sizeRTs(); }
+  document.body.style.background = '#' + new THREE.Color(...P.colors[0].map(x => x / 255)).getHexString();
+  num.textContent = s.toFixed(2);
+  const lc = P.colors[Math.round((N - 1) * 0.72)].map(x => x + (255 - x) * 0.35); num.style.color = `rgb(${lc.map(Math.round).join(',')})`;
+  window.__boxColor = P.colors[Math.round((N - 1) * 0.9)].map(x => Math.round(x + (255 - x) * 0.25));
+  whoTx.innerHTML = label;
+  tx.innerHTML = `综合情绪劳动 · ${STAGES[P.id].label}<br>${d < 0.34 ? '边缘清楚（多是表层）' : d < 0.67 ? '边缘半晕开' : '边缘融进背景（多是深层）'} · 基于 ${data.n}/9 题`;
+}
+const whoTx = {};
+function step(k) { if (!people.length) return; idx = idx < 0 ? 0 : (idx + k + people.length) % people.length; choose(); apply(); }
+addEventListener('keydown', e => { if (e.key === 'ArrowLeft') step(-1); if (e.key === 'ArrowRight') step(1); });
+camBtn.addEventListener('click', startCam);
+addEventListener('resize', sizeRTs);
+sizeRTs(); apply();
+if (Q.has('nocam')) { camBtn.hidden = false; note.textContent = '没有摄像头：先放一段演示视频'; } else startCam();
+
+// ───── 识别：人脸框 + 人像分割 + 最热点（MediaPipe，本地跑，画面不上传）─────
+const ov = document.getElementById('ov'), og = ov.getContext('2d');
+function sizeOv() { ov.width = innerWidth * DPR; ov.height = innerHeight * DPR; }
+addEventListener('resize', sizeOv); sizeOv();
+let faceDet = null, segm = null, maskTex = null, maskArr = null, maskW = 0, maskH = 0, lastDet = 0;
+const box = { x: 0, y: 0, w: 0, h: 0, a: 0, seen: 0 }, hot = { x: 0, y: 0, a: 0 };
+const sm = document.createElement('canvas'); sm.width = 48; sm.height = 27; const smx = sm.getContext('2d', { willReadFrequently: true });
+(async () => {
+  try {
+    const V = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs');
+    const fs = await V.FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm');
+    faceDet = await V.FaceDetector.createFromOptions(fs, { baseOptions: { modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite' }, runningMode: 'VIDEO' });
+    segm = await V.ImageSegmenter.createFromOptions(fs, { baseOptions: { modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/latest/selfie_segmenter.tflite' }, runningMode: 'VIDEO', outputConfidenceMasks: true, outputCategoryMask: false });
+  } catch (e) { console.warn('识别没加载上，只显示热像', e); }
+})();
+// 视频坐标 → 屏幕坐标（铺满 + 镜子，和着色器里一样）
+function toScreen(vx, vy, el) {
+  const W = ov.width, H = ov.height, sc = Math.max(W / el.videoWidth, H / el.videoHeight);
+  const ox = (W - el.videoWidth * sc) / 2, oy = (H - el.videoHeight * sc) / 2;
+  return [W - (ox + vx * sc), oy + vy * sc];
+}
+function detect(el, now) {
+  if (!el.videoWidth || el.readyState < 2) return;
+  if (segm) segm.segmentForVideo(el, now, r => {
+    const m = r.confidenceMasks && r.confidenceMasks[0]; if (!m) return;
+    maskW = m.width; maskH = m.height; const f = m.getAsFloat32Array();
+    if (!maskTex || maskTex.image.width !== maskW) { maskArr = new Uint8Array(maskW * maskH); maskTex = new THREE.DataTexture(maskArr, maskW, maskH, THREE.RedFormat); maskTex.magFilter = maskTex.minFilter = THREE.LinearFilter; }
+    for (let i = 0; i < f.length; i++) maskArr[i] = f[i] * 255;
+    maskTex.needsUpdate = true; passSmall.material.uniforms.uMask.value = maskTex; passSmall.material.uniforms.uHasMask.value = 1;
+  });
+  if (faceDet) {
+    const d = faceDet.detectForVideo(el, now).detections[0];
+    if (d) { const b = d.boundingBox, p1 = toScreen(b.originX, b.originY - b.height * 0.18, el), p2 = toScreen(b.originX + b.width, b.originY + b.height * 1.05, el);
+      const t = { x: Math.min(p1[0], p2[0]), y: p1[1], w: Math.abs(p2[0] - p1[0]), h: p2[1] - p1[1] };
+      const k = box.a < 0.05 ? 1 : 0.35; box.x += (t.x - box.x) * k; box.y += (t.y - box.y) * k; box.w += (t.w - box.w) * k; box.h += (t.h - box.h) * k; box.seen = now; }
+  }
+  // 最热点：人身上最亮的那一处（热像相机的"最高温"标记）
+  if (maskArr) {
+    smx.drawImage(el, 0, 0, sm.width, sm.height); const px = smx.getImageData(0, 0, sm.width, sm.height).data;
+    let best = -1, bx = 0, by = 0;
+    for (let y = 0; y < sm.height; y++) for (let x = 0; x < sm.width; x++) {
+      const i = (y * sm.width + x) * 4, l = px[i] * 0.3 + px[i + 1] * 0.59 + px[i + 2] * 0.11;
+      const mk = maskArr[Math.floor(y / sm.height * maskH) * maskW + Math.floor(x / sm.width * maskW)] / 255;
+      const q = toScreen((x + 0.5) / sm.width * el.videoWidth, (y + 0.5) / sm.height * el.videoHeight, el);
+      const inFace = box.a < 0.1 || (q[0] > box.x && q[0] < box.x + box.w && q[1] > box.y && q[1] < box.y + box.h);
+      const sc = mk > 0.8 && inFace ? l * mk : -1; if (sc > best) { best = sc; bx = x; by = y; } }
+    const p = toScreen((bx + 0.5) / sm.width * el.videoWidth, (by + 0.5) / sm.height * el.videoHeight, el);
+    const k = hot.a < 0.05 ? 1 : 0.18; hot.x += (p[0] - hot.x) * k; hot.y += (p[1] - hot.y) * k;
+  }
+}
+function drawOverlay(now) {
+  og.clearRect(0, 0, ov.width, ov.height);
+  const c = window.__boxColor || [255, 255, 255], col = a => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+  box.a += ((now - box.seen < 500 && open > 0.6 ? 1 : 0) - box.a) * 0.12;
+  hot.a += ((maskArr && open > 0.8 ? 1 : 0) - hot.a) * 0.08;
+  const lw = 1.2 * DPR;
+  if (box.a > 0.02) {   // 只画四个角，不画整框
+    og.strokeStyle = col(0.9 * box.a); og.lineWidth = lw; const L = Math.min(box.w, box.h) * 0.16;
+    og.beginPath();
+    [[box.x, box.y, 1, 1], [box.x + box.w, box.y, -1, 1], [box.x, box.y + box.h, 1, -1], [box.x + box.w, box.y + box.h, -1, -1]].forEach(([x, y, sx, sy]) => {
+      og.moveTo(x + sx * L, y); og.lineTo(x, y); og.lineTo(x, y + sy * L); });
+    og.stroke();
+  }
+  if (hot.a > 0.02) {   // 最热点：一个小十字 + 小圈
+    const r = 7 * DPR; og.strokeStyle = col(0.85 * hot.a); og.lineWidth = lw;
+    og.beginPath(); og.moveTo(hot.x - r * 1.8, hot.y); og.lineTo(hot.x - r * 0.6, hot.y); og.moveTo(hot.x + r * 0.6, hot.y); og.lineTo(hot.x + r * 1.8, hot.y);
+    og.moveTo(hot.x, hot.y - r * 1.8); og.lineTo(hot.x, hot.y - r * 0.6); og.moveTo(hot.x, hot.y + r * 0.6); og.lineTo(hot.x, hot.y + r * 1.8); og.stroke();
+    og.beginPath(); og.arc(hot.x, hot.y, r * 0.25, 0, Math.PI * 2); og.fillStyle = col(0.85 * hot.a); og.fill();
+  }
+}
+
+// ───── 先模糊，点进去再具体（参考 v0.7 lab-unbox）─────
+let open = 0, openGoal = Q.has('open') ? 1 : 0;
+const numEl = document.getElementById('num');
+addEventListener('click', e => { if (LOCKED || e.target.closest('.mine, .review, .lock')) return; openGoal = openGoal ? 0 : 1; });
+document.body.style.cursor = 'pointer';
+
+// ───── 上锁 / 回顾 / 重新答题 ─────
+const lockEl = document.getElementById('lock'), mineNav = document.getElementById('mineNav'), reviewEl = document.getElementById('review');
+if (LOCKED) {
+  openGoal = 0; numEl.style.visibility = 'hidden';
+  const left = 9 - PROG.done, first = TW_CELLS.find(c => !PROG.a[c]), w = TW_where(first);
+  document.getElementById('lk0').textContent = L('热像镜子', 'Thermal Mirror');
+  document.getElementById('lk1').textContent = L('答完九道题，这面镜子会照出你的温度。', 'Answer all nine, and this mirror shows your temperature.');
+  document.getElementById('lk2').textContent = PROG.done ? L(`已答 ${PROG.done} / 9，还差 ${left} 题`, `${PROG.done} of 9 answered, ${left} to go`) : L('你还没答题', 'You haven\'t answered yet');
+  const go = document.getElementById('lk3'); go.textContent = PROG.done ? L('接着答 →', 'Continue →') : L('去答题 →', 'Start →');
+  go.href = `${w.page}?shot=${w.shot}`; lockEl.classList.add('on');
+} else if (mine && idx < 0) {
+  mineNav.classList.add('on');
+  document.getElementById('rv').textContent = L('回顾我的回答', 'Review my answers');
+  document.getElementById('redo').textContent = L('重新答题', 'Answer again');
+  document.getElementById('rvh').textContent = L('我的九个回答', 'My nine answers');
+  const REL3 = { 1: L('导师或上级', 'Supervisor'), 2: L('同学或同事', 'Peer'), 3: L('很亲近的人', 'Someone close') };
+  const EV3 = { A: L('改期', 'Postponed'), B: L('看作品', 'Their work'), C: L('好消息', 'Good news') };
+  document.getElementById('rvl').innerHTML = TW_CELLS.map(c => { const m = PROG.a[c], w = TW_where(c);
+    const dp = m.score == null ? '' : `&score=${m.score}&depth=${m.acting === 'deep' ? 1 : m.acting === 'unsure' ? 0.5 : 0}`;
+    return `<li data-href="${w.page}?shot=${w.shot}${dp}&review"><span class="k">${REL3[c[1]]} · ${EV3[c[0]]}</span><span class="a">${m.ans || ''}${m.feel ? `<small>${m.feel}</small>` : ''}</span><span class="g">${m.score == null ? '—' : m.score + ' / 4'} →</span></li>`; }).join('');
+  document.getElementById('rvl').onclick = e => { const li = e.target.closest('li'); if (li) location.href = li.dataset.href; };
+  document.getElementById('rv').onclick = () => reviewEl.classList.add('on');
+  document.getElementById('rvx').onclick = () => reviewEl.classList.remove('on');
+  document.getElementById('redo').onclick = () => { if (confirm(L('清空这九个回答，重新开始？', 'Clear these nine answers and start again?'))) { TW_reset(); location.href = './办公桌_新布景_轮廓.html'; } };
+}
+
+const clock = new THREE.Clock();
+function frame() {
+  const t = clock.getElapsedTime();
+  if (!usingCam) drawFake(t);
+  { const v = usingCam ? video : demoVid; passSmall.material.uniforms.uSrcAspect.value = v.videoWidth ? v.videoWidth / v.videoHeight : 4 / 3; }
+  passSmall.material.uniforms.uSrc.value = src;
+  renderer.setRenderTarget(rtS); passSmall.render(renderer);
+  passCopy.material.uniforms.uT.value = rtS.texture; renderer.setRenderTarget(rtTiny); passCopy.render(renderer); U.uTiny.value = rtTiny.texture;
+  const a = rtH[hi], b = rtH[1 - hi];
+  passHeat.material.uniforms.uNow.value = rtS.texture; passHeat.material.uniforms.uPrev.value = a.texture;
+  renderer.setRenderTarget(b); passHeat.render(renderer); hi = 1 - hi;
+  renderer.setRenderTarget(null);
+  U.uLo.value = 0.08; U.uHi.value = 0.82;
+  open += (openGoal - open) * 0.035; const eo = open * open * (3 - 2 * open);
+  U.uOpen.value = eo; numEl.style.opacity = Math.max(0, (eo - 0.55) / 0.45).toFixed(3);
+  U.uLum.value = rtS.texture; U.uHeat.value = b.texture; U.uT.value = t;
+  passColor.render(renderer);
+  const now = performance.now(), el = usingCam ? video : demoVid;
+  if (now - lastDet > 66) { lastDet = now; try { detect(el, now); } catch (e) {} }   // 一秒识别 15 次
+  drawOverlay(now);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

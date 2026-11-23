@@ -1,0 +1,8 @@
+/* 同温层 · 中文字体与排版（2026-11-23）
+   字体：MiSans（小米，免费商用，按字分片加载）。细 250 / 常规 330 / 中 380。
+   原则：正文用细体、行距大、字距略开；标题用常规或中，不用粗体堆。 */
+@import url("https://cdn.jsdelivr.net/npm/misans@4.1.0/lib/Normal/MiSans-Light.min.css");
+@import url("https://cdn.jsdelivr.net/npm/misans@4.1.0/lib/Normal/MiSans-Regular.min.css");
+@import url("https://cdn.jsdelivr.net/npm/misans@4.1.0/lib/Normal/MiSans-Medium.min.css");
+:root { --zh: "MiSans", "PingFang SC", "Hiragino Sans GB", sans-serif; }
+.lang-zh body { font-family: var(--zh); font-weight: 330; letter-spacing: .04em; font-feature-settings: "palt" 0; }

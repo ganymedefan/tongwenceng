@@ -136,7 +136,7 @@ frames.forEach((f, k) => f.addEventListener('load', () => {
 }));
 addEventListener('message', e => {
   const m = e.data; if (!m || !m.tw) return;
-  if (m.tw === 'wheel') wheel(m.dy);
+  if (m.tw === 'wheel') wheel(m.fling && armed && Math.abs(cur - WALL()) < 8 ? 0 : m.dy);   // 松手的惯性不算进阻尼的拉力（要手指真的往下拉）
   if (m.tw === 'lang') { try { localStorage.setItem('tw_lang', m.v); } catch (er) {} location.reload(); }
   if (m.tw === 'go') show(m.href);
 });

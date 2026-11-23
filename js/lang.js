@@ -32,13 +32,23 @@
     addEventListener('wheel', e => { if (!atEdge(e.deltaY) || inner(e.target, e.deltaY)) return; e.preventDefault();
       const dy = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaMode === 2 ? e.deltaY * innerHeight : e.deltaY;
       window.parent.postMessage({ tw: 'wheel', dy }, '*'); }, { passive: false });
-    let ty = null;
-    let tEl = null, tTop = 0;   // 这一下手势开始时，手指下面那块能滚的区域和它的位置
+    // 触屏：手指在页面上拖，页面自己滚不动时，把每一小段移动都交给外层（和滚轮一样），
+    // 并且挡住浏览器"顺手直接滚外层"——不挡的话外层的阻尼会一直把它拉回来，看起来就是来回抖。松手时带一点惯性。
+    let ty = null, tEl = null, vy = 0, lt = 0;
     const scroller = el => { for (; el && el !== document.body && el.nodeType === 1; el = el.parentElement) { const cs = getComputedStyle(el);
       if (/(auto|scroll)/.test(cs.overflowY) && el.scrollHeight > el.clientHeight + 2) return el; } return null; };
-    addEventListener('touchstart', e => { ty = e.touches[0].clientY; tEl = scroller(e.target); tTop = tEl ? tEl.scrollTop : 0; }, { passive: true });
-    addEventListener('touchend', e => { if (ty == null) return; const dy = ty - e.changedTouches[0].clientY; ty = null;
-      if (Math.abs(dy) > 60 && atEdge(dy) && !(tEl && (Math.abs(tEl.scrollTop - tTop) > 2 || inner(tEl, dy)))) window.parent.postMessage({ tw: 'wheel', dy: dy * 3 }, '*'); }, { passive: true });
+    addEventListener('touchstart', e => { if (e.touches.length > 1) { ty = null; return; } ty = e.touches[0].clientY; tEl = scroller(e.target); vy = 0; lt = performance.now(); }, { passive: true });
+    addEventListener('touchmove', e => {
+      if (ty == null || e.touches.length > 1) return;
+      const y = e.touches[0].clientY, dy = ty - y; ty = y;
+      if (tEl && inner(tEl, dy)) return;                                  // 题目栏之类还能滚：让它自己滚
+      if (!atEdge(dy)) return;
+      if (e.cancelable) e.preventDefault();
+      const now = performance.now(), dt = Math.max(8, now - lt); lt = now; vy = vy * 0.6 + (dy / dt) * 0.4;
+      window.parent.postMessage({ tw: 'wheel', dy }, '*');
+    }, { passive: false });
+    addEventListener('touchend', () => { if (ty == null) return; ty = null;
+      if (Math.abs(vy) > 0.25 && performance.now() - lt < 120) window.parent.postMessage({ tw: 'wheel', dy: vy * 260, fling: true }, '*'); }, { passive: true });
     addEventListener('keydown', e => { if (['PageDown', 'PageUp'].includes(e.key)) window.parent.postMessage({ tw: 'wheel', dy: e.key === 'PageDown' ? 200 : -200 }, '*'); });
     // 站内链接：交给外层（外层知道是哪一屏就翻过去，不知道就整页跳）
     addEventListener('click', e => { if (e.defaultPrevented) return; const a = e.target.closest && e.target.closest('a[href]'); if (!a) return;

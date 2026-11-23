@@ -30,22 +30,24 @@ button{all:unset;cursor:pointer}
 body.still .col,body.still .mark,body.still #cam{display:none}
 #cam{display:none}body.camtool #cam{display:flex}
 .nav{display:flex;gap:28px;align-items:baseline;margin-top:3.4vh}.nav .next{margin-top:0}
-.prev{font-size:14px;letter-spacing:.08em;opacity:.55;visibility:hidden}.prev.on{visibility:visible}.prev:hover{opacity:1}
+.prev{font-size:14px;letter-spacing:.08em;opacity:.55;display:none}.prev.on{display:inline-block}.prev:hover{opacity:1}
 /* 选中的那一项：只有圆点变成热弥散的一小团，字不变 */
 .col{z-index:2}
 #hot{position:fixed;inset:0;width:100vw;height:100vh;pointer-events:none;z-index:1}
-body.stack .mark{left:20px;top:16px;width:104px}
-body.stack .col{left:0;right:0;width:auto;top:42vh;bottom:0;transform:none;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;
-  padding:5vh max(22px,6vw) 8vh;z-index:2}
+body.stack .mark{left:18px;top:14px;width:88px}
+body.stack .col{left:0;right:0;width:auto;top:30vh;top:30dvh;bottom:0;transform:none;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;
+  padding:3.2vh max(20px,6vw) 3vh;z-index:2}
 /* 竖屏：题目栏下面垫白（热光晕画在白上面、字下面） */
-body.stack::after{content:"";position:fixed;left:0;right:0;top:42vh;bottom:0;background:linear-gradient(rgba(255,255,255,0),rgba(255,255,255,.94) 5vh,#fff 11vh);pointer-events:none;z-index:0}
+body.stack::after{content:"";position:fixed;left:0;right:0;top:30vh;top:30dvh;bottom:0;background:linear-gradient(rgba(255,255,255,0),rgba(255,255,255,.94) 3vh,#fff 7vh);pointer-events:none;z-index:0}
 body.stack .col>*{max-width:620px}
-body.stack .no{margin-bottom:1.4vh}
-body.stack .tx{font-size:16px;line-height:1.75}
-body.stack .q{font-size:13.5px;margin:2.4vh 0 1vh}
-body.stack .opts button{font-size:15px;padding:9px 0 9px 24px}
-body.stack .opts button::before{top:calc(9px + .45em)}
-body.stack .nav{margin:2.6vh 0 0}
+body.stack .no{margin-bottom:.9vh;font-size:12px}
+body.stack .tx{font-size:15px;line-height:1.62}
+body.stack .q{font-size:12.5px;margin:1.6vh 0 .5vh}
+body.stack .opts button{font-size:14px;line-height:1.45;padding:6px 0 6px 22px}
+body.stack .opts button::before{top:calc(6px + .38em)}
+body.stack .nav{margin:1.8vh 0 0}
+/* 手机：第一问选好后，没选的收起来，给"你心里——"腾地方；再点一下选中的那项就展开重选 */
+body.stack #front.picked button:not([aria-pressed=true]){display:none}
 </style></head><body>
 <a class="mark" href="./首页.html"><img src="./logo/logo_彩虹.png" alt="In the Stratospheric Realm 同温层"></a>
 <div class="col" id="col">
@@ -335,7 +337,7 @@ function resize() {
   finalQuad.material.uniforms.px.value.set(1 / size.x, 1 / size.y);
   const stack = !STILL && (w <= 760 || a < 0.9); document.body.classList.toggle('stack', stack);   // 手机、竖着的平板：画面在上，题目在下
   const cx = !stack && !STILL ? 0.34 : 0;   // 宽屏：画面中心往右挪，让出左边的问题
-  const k = stack ? 1.2 : 1, oy = stack ? -0.55 * H * k : 0;
+  const k = stack ? 1.45 : 1, oy = stack ? -0.7 * H * k : 0;   // 竖屏：场景中心放在离顶 15% 处（上面那三成里）
   Object.assign(camera, { left: -H * k * a - cx * H * a, right: H * k * a - cx * H * a, top: H * k + oy, bottom: -H * k + oy });
   camera.updateProjectionMatrix();
 }
@@ -352,7 +354,7 @@ let cur = GRAY, spreadAnim = null;
 const setAB = (k, st) => { FU['ramp' + k].value = st.ramp; FU['cap' + k].value = st.cap; FU['edge' + k].value = st.edge; FU['heat' + k].value = st.heat; };
 function go(st, dur = 2400) {
   setAB('A', cur); setAB('B', st); cur = st;
-  const stk = document.body.classList.contains('stack'), diag = Math.hypot(size.x, size.y), cx = size.x * (!stk && !STILL ? 0.67 : 0.5), cy = size.y * (stk ? 0.76 : 0.5);
+  const stk = document.body.classList.contains('stack'), diag = Math.hypot(size.x, size.y), cx = size.x * (!stk && !STILL ? 0.67 : 0.5), cy = size.y * (stk ? 0.85 : 0.5);
   FU.spread.value.set(cx, cy, 0, diag * 0.06);
   spreadAnim = { t0: performance.now(), dur, reach: Math.hypot(Math.max(cx, size.x - cx), size.y) + diag * 0.12 };
 }
@@ -414,10 +416,12 @@ function showItem(i) {
   next.textContent = i < ITEMS.length - 1 ? L('下一题', 'Next') : (+STG < 3 ? L('下一张桌子', 'Next table') : L('看我的温度', 'See my temperature'));
   prev.textContent = L('上一题', 'Back'); prev.classList.toggle('on', i > 0 || !!PREV_PAGE);
   col.scrollTop = 0;
+  front.classList.remove('picked');
   front.querySelectorAll('button').forEach(b => b.onclick = () => {
+    if (front.classList.contains('picked') && b.getAttribute('aria-pressed') === 'true') { front.classList.remove('picked'); heatSoon(); return; }   // 展开重选
     clearTimeout(autoT); press(front, b); press(backOpts, null);
     if (b.dataset.v === 'na') { score = -1; save(ITEMS[idx], null, null); back.classList.remove('on'); next.classList.add('on'); go(GRAY); heatSoon(); auto(); return; }
-    score = +b.dataset.v; depth = 0.5; save(ITEMS[idx], score, null); back.classList.toggle('on', score > 0); next.classList.toggle('on', score === 0);
+    score = +b.dataset.v; depth = 0.5; save(ITEMS[idx], score, null); back.classList.toggle('on', score > 0); next.classList.toggle('on', score === 0); front.classList.toggle('picked', score > 0);
     go(heatState(score, depth)); heatSoon();
     if (score === 0) auto();
     else setTimeout(() => back.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 60);
@@ -431,7 +435,7 @@ function showItem(i) {
   if (mine) {
     const fb = front.querySelector(`[data-v="${mine.score == null ? 'na' : mine.score}"]`); if (fb) press(front, fb);
     score = mine.score == null ? -1 : mine.score;
-    if (mine.score) { back.classList.add('on'); const bi = it.back.indexOf(mine.feel); if (bi >= 0) { press(backOpts, backOpts.children[bi]); depth = [0, 1, 0.5][bi]; next.classList.add('on'); } }
+    if (mine.score) { back.classList.add('on'); front.classList.add('picked'); const bi = it.back.indexOf(mine.feel); if (bi >= 0) { press(backOpts, backOpts.children[bi]); depth = [0, 1, 0.5][bi]; next.classList.add('on'); } }
     else next.classList.add('on');
     setTimeout(() => go(mine.score == null ? GRAY : heatState(mine.score, mine.score ? depth : 0.5), 1600), 50);
   }

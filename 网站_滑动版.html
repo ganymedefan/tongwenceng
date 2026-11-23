@@ -56,6 +56,9 @@ const frames = [...document.querySelectorAll('iframe[data-src]')];
 const secs = [...document.querySelectorAll('#wrap > section')];
 const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting && !e.target.src) e.target.src = e.target.dataset.src; }), { rootMargin: '60% 0px' });
 frames.forEach(f => io.observe(f));
+// 某一屏真的翻到眼前了（露出六成以上）：告诉那一页（热像镜子要等这时才请求相机）
+const seen = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting && e.target.contentWindow) e.target.contentWindow.postMessage({ tw: 'shown' }, '*'); }), { threshold: 0.6 });
+frames.forEach(f => { seen.observe(f); f.addEventListener('load', () => { const r = f.getBoundingClientRect(); if (r.top < innerHeight * 0.4 && r.bottom > innerHeight * 0.6) f.contentWindow.postMessage({ tw: 'shown' }, '*'); }); });
 
 // ───── 滚动：照 rejouice 用的 Lenis 的做法 ─────
 // 滚轮只改"目标位置"，页面每帧往目标走剩下距离的约 1/10（按真实时间算，屏幕快慢都一样），停得软。

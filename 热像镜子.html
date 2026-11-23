@@ -273,7 +273,12 @@ addEventListener('keydown', e => { if (e.key === 'ArrowLeft') step(-1); if (e.ke
 camBtn.addEventListener('click', startCam);
 addEventListener('resize', sizeRTs);
 sizeRTs(); apply();
-if (Q.has('nocam')) { camBtn.hidden = false; note.textContent = '没有摄像头：先放一段演示视频'; } else startCam();
+// 相机：翻到这一屏才请求（在滑动站里由外层告诉我"现在看到你了"）；还没答完、上着锁就不请求
+let camAsked = false;
+function wantCam() { if (camAsked || LOCKED) return; camAsked = true; startCam(); }
+if (Q.has('nocam')) { camBtn.hidden = false; note.textContent = '没有摄像头：先放一段演示视频'; }
+else if (window.TW_IN_FRAME) addEventListener('message', e => { if (e.data && e.data.tw === 'shown') wantCam(); });
+else wantCam();
 
 // ───── 识别：人脸框 + 人像分割 + 最热点（MediaPipe，本地跑，画面不上传）─────
 const ov = document.getElementById('ov'), og = ov.getContext('2d');

@@ -6,3 +6,8 @@
 @import url("https://cdn.jsdelivr.net/npm/misans@4.1.0/lib/Normal/MiSans-Medium.min.css");
 :root { --zh: "MiSans", "PingFang SC", "Hiragino Sans GB", sans-serif; }
 .lang-zh body { font-family: var(--zh); font-weight: 330; letter-spacing: .04em; font-feature-settings: "palt" 0; }
+
+/* 手机：长按不弹出"复制/选中/存图"，点一下不闪灰框（这是作品，不是文档） */
+html { -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+body { -webkit-user-select: none; user-select: none; }
+img { -webkit-user-drag: none; }

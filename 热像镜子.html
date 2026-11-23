@@ -40,6 +40,8 @@ canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block;
 .lock p { font-family: "Exposure", Georgia, serif; font-size: clamp(26px, 3vw, 44px); line-height: 1.25; color: #1b181d; max-width: 16em; }
 .lock small { display: block; margin-top: 14px; font-size: 13px; color: rgba(27,24,29,.6); letter-spacing: .04em; }
 .lock a { display: inline-block; margin-top: 30px; font-size: 15px; padding: 12px 22px; border-radius: 999px; background: #1b181d; color: #fff; text-decoration: none; cursor: pointer; }
+.lock a.try { background: none; color: #1b181d; padding: 0; margin-top: 18px; font-size: 13.5px; border-bottom: 1px solid currentColor; border-radius: 0; opacity: .7; }
+.lock a.try:hover { opacity: 1; }
 .lang-zh .lock p { font-family: var(--zh); font-weight: 330; letter-spacing: .06em; line-height: 1.6; max-width: 22em; }
 .lang-zh .lock small, .lang-zh .lock a { font-family: var(--zh); font-weight: 330; letter-spacing: .1em; }
 /* 答完以后：回顾 · 重新答题 */
@@ -71,7 +73,7 @@ canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block;
 <canvas id="c"></canvas>
 <canvas id="ov"></canvas>
 <div class="read"><div class="n" id="num"></div></div>
-<div class="lock" id="lock"><em id="lk0"></em><p id="lk1"></p><small id="lk2"></small><a id="lk3"></a></div>
+<div class="lock" id="lock"><em id="lk0"></em><p id="lk1"></p><small id="lk2"></small><a id="lk3"></a><a id="lk4" class="try"></a></div>
 <nav class="mine" id="mineNav"><a id="rv"></a><span>·</span><a id="redo"></a></nav>
 <div class="review" id="review"><div class="rin"><header><h2 id="rvh"></h2><a id="rvx">×</a></header><ol id="rvl"></ol></div></div>
 
@@ -360,6 +362,9 @@ if (LOCKED) {
   document.getElementById('lk2').textContent = PROG.done ? L(`已答 ${PROG.done} / 9，还差 ${left} 题`, `${PROG.done} of 9 answered, ${left} to go`) : L('你还没答题', 'You haven\'t answered yet');
   const go = document.getElementById('lk3'); go.textContent = PROG.done ? L('接着答 →', 'Continue →') : L('去答题 →', 'Start →');
   go.href = `${w.page}?shot=${w.shot}`; lockEl.classList.add('on');
+  // 不想答也能先看看：随机拿 93 份真实答卷里的一份来照
+  const t = document.getElementById('lk4'), pick = people.length ? people[Math.floor(Math.random() * people.length)].no : 63;
+  t.textContent = L('先用示例数据试一下', 'Try it with sample data'); t.href = `./热像镜子.html?demo&no=${pick}`;
 } else if (mine && idx < 0) {
   mineNav.classList.add('on');
   document.getElementById('rv').textContent = L('回顾我的回答', 'Review my answers');

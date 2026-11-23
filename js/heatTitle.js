@@ -127,7 +127,12 @@ window.heatField = function (cv) {
       gl.viewport(0, 0, cv.width, cv.height); gl.uniform2f(uRes, W, H);
       const S = mk(cv.width, cv.height), x = S.getContext('2d');
       x.scale(dpr, dpr); x.fillStyle = '#000'; x.fillRect(0, 0, W, H); x.fillStyle = '#fff'; x.textAlign = 'center'; x.textBaseline = 'middle';
-      items.forEach(it => { x.font = it.font || `400 ${it.size || 20}px Exposure, Georgia, serif`; x.fillText(it.text, it.x, it.y); });
+      items.forEach(it => {
+        if (it.dot) { x.beginPath(); x.arc(it.x, it.y, it.dot + (it.grow || 0) / 2, 0, Math.PI * 2); x.fill(); return; }
+        x.font = it.font || `400 ${it.size || 20}px Exposure, Georgia, serif`; x.textAlign = it.align || 'center';
+        if ('letterSpacing' in x) x.letterSpacing = it.spacing || '0px';
+        if (it.grow) { x.lineWidth = it.grow; x.lineJoin = 'round'; x.strokeStyle = '#fff'; x.strokeText(it.text, it.x, it.y); }   // 字后面的热要比字粗一圈
+        x.fillText(it.text, it.x, it.y); });
       const N = down(down(S, 2), 2), F = down(down(N, 2), 2), Wd = down(down(F, 2), 2);
       put(0, S); put(1, N); put(2, F); put(3, Wd);
       const id = sx.createImageData(128, 1); TW_grdStrip(stage, 128).forEach((c, i) => id.data.set([c[0], c[1], c[2], 255], i * 4)); sx.putImageData(id, 0, 0); put(4, strip);

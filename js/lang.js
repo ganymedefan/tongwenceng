@@ -25,13 +25,20 @@
       if (se.scrollHeight <= innerHeight + 2) return true;
       return dy > 0 ? se.scrollTop + innerHeight >= se.scrollHeight - 2 : se.scrollTop <= 1; };
     // 到头了：这一下交给外层（外层按自己的节奏滚、管阻尼），并且不让浏览器顺手把外层也直接滚了
-    addEventListener('wheel', e => { if (!atEdge(e.deltaY)) return; e.preventDefault();
+    // 手指/滚轮下面有自己能滚的一块（比如手机上问卷的题目栏）、而且它还没滚到头：让它自己滚
+    const inner = (el, dy) => { for (; el && el !== document.body && el.nodeType === 1; el = el.parentElement) {
+      const cs = getComputedStyle(el); if (!/(auto|scroll)/.test(cs.overflowY) || el.scrollHeight <= el.clientHeight + 2) continue;
+      if (dy > 0 ? el.scrollTop + el.clientHeight < el.scrollHeight - 2 : el.scrollTop > 1) return true; } return false; };
+    addEventListener('wheel', e => { if (!atEdge(e.deltaY) || inner(e.target, e.deltaY)) return; e.preventDefault();
       const dy = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaMode === 2 ? e.deltaY * innerHeight : e.deltaY;
       window.parent.postMessage({ tw: 'wheel', dy }, '*'); }, { passive: false });
     let ty = null;
-    addEventListener('touchstart', e => { ty = e.touches[0].clientY; }, { passive: true });
+    let tEl = null, tTop = 0;   // 这一下手势开始时，手指下面那块能滚的区域和它的位置
+    const scroller = el => { for (; el && el !== document.body && el.nodeType === 1; el = el.parentElement) { const cs = getComputedStyle(el);
+      if (/(auto|scroll)/.test(cs.overflowY) && el.scrollHeight > el.clientHeight + 2) return el; } return null; };
+    addEventListener('touchstart', e => { ty = e.touches[0].clientY; tEl = scroller(e.target); tTop = tEl ? tEl.scrollTop : 0; }, { passive: true });
     addEventListener('touchend', e => { if (ty == null) return; const dy = ty - e.changedTouches[0].clientY; ty = null;
-      if (Math.abs(dy) > 60 && atEdge(dy)) window.parent.postMessage({ tw: 'wheel', dy: dy * 3 }, '*'); }, { passive: true });
+      if (Math.abs(dy) > 60 && atEdge(dy) && !(tEl && (Math.abs(tEl.scrollTop - tTop) > 2 || inner(tEl, dy)))) window.parent.postMessage({ tw: 'wheel', dy: dy * 3 }, '*'); }, { passive: true });
     addEventListener('keydown', e => { if (['PageDown', 'PageUp'].includes(e.key)) window.parent.postMessage({ tw: 'wheel', dy: e.key === 'PageDown' ? 200 : -200 }, '*'); });
     // 站内链接：交给外层（外层知道是哪一屏就翻过去，不知道就整页跳）
     addEventListener('click', e => { if (e.defaultPrevented) return; const a = e.target.closest && e.target.closest('a[href]'); if (!a) return;

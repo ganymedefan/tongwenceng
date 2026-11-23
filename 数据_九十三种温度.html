@@ -54,7 +54,7 @@ canvas#cnt { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 3;
 .lang-zh .meta { font-weight: 250; letter-spacing: .04em; }
 .lang-zh .meta dt { letter-spacing: .14em; }
 .lang-zh .meta dd b { font-weight: 380; }
-@media (max-width: 900px) { .meta { display: none; } }
+@media (max-width: 900px) { .meta { font-size: 11.5px; margin-top: 14px; grid-template-columns: 3.6em 1fr; } .meta dt, .meta dd { padding: 6px 0; } .lede p { font-size: 16px; } }
 @media (max-width: 900px) { .lede { width: auto; right: var(--pad); top: auto; bottom: var(--pad); transform: none; left: var(--pad); } .nav { gap: 14px; font-size: 13px; } }
 </style>
 </head>
@@ -186,8 +186,8 @@ const countsEl = document.getElementById('counts');
 function build() {
   const W = innerWidth, H = innerHeight, narrow = W < 900;
   cv.width = W * DPR; cv.height = H * DPR; gl.viewport(0, 0, cv.width, cv.height);
-  const R = Math.min(narrow ? W * 0.38 : W * 0.25, H * 0.36);
-  const CX = narrow ? W / 2 : Math.max(W * 0.66, Math.min(W * 0.28, 400) + Math.min(W * 0.06, 110) + 60 + R * 1.25), CY = narrow ? H * 0.42 : H * 0.52;
+  const R = narrow ? Math.min(W * 0.36, H * 0.19) : Math.min(W * 0.25, H * 0.36);   // 手机：图小一点、放上面，下面留给文字
+  const CX = narrow ? W / 2 : Math.max(W * 0.66, Math.min(W * 0.28, 400) + Math.min(W * 0.06, 110) + 60 + R * 1.25), CY = narrow ? H * 0.3 : H * 0.52;
   geo = { R, CX, CY };
   const sc = 0.5, cw = Math.round(W * sc), ch = Math.round(H * sc);
   const mk = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
@@ -236,7 +236,7 @@ function showCounts(k) {
   cntFx.set(items, STG[+arms[k].cell[1] - 1]);
 }
 let hov = -1;
-addEventListener('pointermove', e => {
+const onPoint = e => {
   const k = armAt(e.clientX, e.clientY);
   if (k === hov) return; hov = k;
   if (k >= 0 && k !== cur) { if (cur >= 0 && A > 0.05) { prev = cur; B = A; } cur = k; A = 0; upload(); }
@@ -251,7 +251,8 @@ addEventListener('pointermove', e => {
   const r = info.getBoundingClientRect(), m = 16;                       // 别出屏幕
   if (r.right > innerWidth - m) info.style.left = (x - (r.right - innerWidth + m)) + 'px';
   if (r.left < m) info.style.left = (x + (m - r.left)) + 'px';
-});
+};
+addEventListener('pointermove', onPoint); addEventListener('pointerdown', onPoint);   // 手机上点一下也算
 
 const t0 = performance.now();
 (function frame() {

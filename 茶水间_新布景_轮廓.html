@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>同温层 · 茶水间 · 轮廓版</title><link rel="icon" href="./favicon.svg"><link rel="stylesheet" href="./css/zh.css"><script src="./js/lang.js"></script><script src="./js/progress.js"></script>
+<title>同温层 · 茶水间 · 轮廓版</title><link rel="icon" href="./favicon.svg"><link rel="stylesheet" href="./css/zh.css"><script src="./js/lang.js"></script><script src="./js/progress.js"></script><script src="./js/grd.js"></script><script src="./js/heatTitle.js"></script>
 <script type="importmap">{ "imports": {
   "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
   "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/" } }</script>
@@ -22,12 +22,30 @@ canvas{position:fixed;inset:0;width:100vw!important;height:100vh!important;curso
 button{all:unset;cursor:pointer}
 .opts button{font-size:clamp(13.5px,.98vw,16px);line-height:1.55;padding:.75vh 0 .75vh 22px;position:relative;opacity:.78}
 .opts button::before{content:"";position:absolute;left:0;top:calc(.75vh + .45em);width:9px;height:9px;border-radius:50%;border:1px solid currentColor}
-.opts button:hover{opacity:1}.opts button[aria-pressed=true]{opacity:1;font-weight:650}.opts button[aria-pressed=true]::before{background:currentColor}
+.opts button:hover{opacity:1}.opts button[aria-pressed=true]::before{border-color:transparent}
 .na{opacity:.45!important}#back{display:none}#back.on{display:block}
 .next{margin-top:3.4vh;font-size:14px;letter-spacing:.08em;border-bottom:1px solid currentColor;visibility:hidden}.next.on{visibility:visible}
 #cam{position:fixed;right:3vw;bottom:3.5vh;font-size:12px;letter-spacing:.06em;display:flex;gap:14px;align-items:center;opacity:.75}
 #cam[hidden]{display:none}#cam button{border-bottom:1px solid currentColor}#cam .ok{opacity:.6}
 body.still .col,body.still .mark,body.still #cam{display:none}
+#cam{display:none}body.camtool #cam{display:flex}
+.nav{display:flex;gap:28px;align-items:baseline;margin-top:3.4vh}.nav .next{margin-top:0}
+.prev{font-size:14px;letter-spacing:.08em;opacity:.55;visibility:hidden}.prev.on{visibility:visible}.prev:hover{opacity:1}
+/* 选中的那一项：只有圆点变成热弥散的一小团，字不变 */
+.col{z-index:2}
+#hot{position:fixed;inset:0;width:100vw;height:100vh;pointer-events:none;z-index:1}
+body.stack .mark{left:20px;top:16px;width:104px}
+body.stack .col{left:0;right:0;width:auto;top:42vh;bottom:0;transform:none;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;
+  padding:5vh max(22px,6vw) 8vh;z-index:2}
+/* 竖屏：题目栏下面垫白（热光晕画在白上面、字下面） */
+body.stack::after{content:"";position:fixed;left:0;right:0;top:42vh;bottom:0;background:linear-gradient(rgba(255,255,255,0),rgba(255,255,255,.94) 5vh,#fff 11vh);pointer-events:none;z-index:0}
+body.stack .col>*{max-width:620px}
+body.stack .no{margin-bottom:1.4vh}
+body.stack .tx{font-size:16px;line-height:1.75}
+body.stack .q{font-size:13.5px;margin:2.4vh 0 1vh}
+body.stack .opts button{font-size:15px;padding:9px 0 9px 24px}
+body.stack .opts button::before{top:calc(9px + .45em)}
+body.stack .nav{margin:2.6vh 0 0}
 </style></head><body>
 <a class="mark" href="./首页.html"><img src="./logo/logo_彩虹.png" alt="In the Stratospheric Realm 同温层"></a>
 <div class="col" id="col">
@@ -36,8 +54,9 @@ body.still .col,body.still .mark,body.still #cam{display:none}
   <p class="q" id="fq"></p>
   <div class="opts" id="front"></div>
   <div id="back"><p class="q" id="bq">说这句话的时候，你心里——</p><div class="opts" id="backOpts"></div></div>
-  <button class="next" id="next">下一题</button>
+  <div class="nav"><button class="prev" id="prev">上一题</button><button class="next" id="next">下一题</button></div>
 </div>
+<canvas id="hot"></canvas>
 <div id="cam"><span id="camTx"></span><button id="camSave">定下这个镜头</button><span class="ok" id="camOk"></span></div>
 <script type="module">
 import * as THREE from 'three';
@@ -314,8 +333,10 @@ function resize() {
   rtF.forEach(r => r.setSize(Math.ceil(size.x / 4), Math.ceil(size.y / 4)));
   rtW.forEach(r => r.setSize(Math.ceil(size.x / 12), Math.ceil(size.y / 12)));
   finalQuad.material.uniforms.px.value.set(1 / size.x, 1 / size.y);
-  const cx = w > 760 && !STILL ? 0.34 : 0;   // 宽屏：画面中心往右挪，让出左边的问题
-  Object.assign(camera, { left: -H * a - cx * H * a, right: H * a - cx * H * a, top: H, bottom: -H });
+  const stack = !STILL && (w <= 760 || a < 0.9); document.body.classList.toggle('stack', stack);   // 手机、竖着的平板：画面在上，题目在下
+  const cx = !stack && !STILL ? 0.34 : 0;   // 宽屏：画面中心往右挪，让出左边的问题
+  const k = stack ? 1.2 : 1, oy = stack ? -0.55 * H * k : 0;
+  Object.assign(camera, { left: -H * k * a - cx * H * a, right: H * k * a - cx * H * a, top: H * k + oy, bottom: -H * k + oy });
   camera.updateProjectionMatrix();
 }
 addEventListener('resize', resize); resize();
@@ -331,7 +352,7 @@ let cur = GRAY, spreadAnim = null;
 const setAB = (k, st) => { FU['ramp' + k].value = st.ramp; FU['cap' + k].value = st.cap; FU['edge' + k].value = st.edge; FU['heat' + k].value = st.heat; };
 function go(st, dur = 2400) {
   setAB('A', cur); setAB('B', st); cur = st;
-  const diag = Math.hypot(size.x, size.y), cx = size.x * (innerWidth > 760 && !STILL ? 0.67 : 0.5), cy = size.y * 0.5;
+  const stk = document.body.classList.contains('stack'), diag = Math.hypot(size.x, size.y), cx = size.x * (!stk && !STILL ? 0.67 : 0.5), cy = size.y * (stk ? 0.76 : 0.5);
   FU.spread.value.set(cx, cy, 0, diag * 0.06);
   spreadAnim = { t0: performance.now(), dur, reach: Math.hypot(Math.max(cx, size.x - cx), size.y) + diag * 0.12 };
 }
@@ -349,54 +370,106 @@ function moveTo(k, dur = 2600) {
 function pulse(key) { if (traces[key]) pulseAnim = { m: traces[key], t0: performance.now(), dur: 1500 }; }
 
 /* ---------- 问卷流程 ---------- */
+// 两部分都答完（或只需答一部分时答完）就自动去下一题；"上一题 / 下一题"一直可以手动按。回到答过的题，原来的选择还在。
 const $ = id => document.getElementById(id);
-const col = $('col'), front = $('front'), back = $('back'), backOpts = $('backOpts'), next = $('next');
-let idx = 0, score = null, depth = 0.5;
+const col = $('col'), front = $('front'), back = $('back'), backOpts = $('backOpts'), next = $('next'), prev = $('prev');
+const STG = '2', STAGE = ['front', 'mid', 'back'][+STG - 1];
+const ORDER = ['办公桌_新布景_轮廓.html', '茶水间_新布景_轮廓.html', '小桌_新布景_轮廓.html'], PAGE = ORDER[+STG - 1];
+const NEXT_PAGE = ORDER[+STG] || '热像镜子.html?open', PREV_PAGE = ORDER[+STG - 2];
+const REVIEW = Q.has('review');
+let idx = 0, score = null, depth = 0.5, autoT = 0, moving = false;
 const press = (box, el) => box.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b === el));
+// 选中的那一项：圆点和字做成"字的热弥散"
+const hotFx = heatField($('hot'));
+function lines(btn) {
+  const out = [], walker = document.createTreeWalker(btn, NodeFilter.SHOW_TEXT), r = document.createRange(); let cur = null, n;
+  while ((n = walker.nextNode())) for (let i = 0; i < n.length; i++) {
+    r.setStart(n, i); r.setEnd(n, i + 1); const b = r.getBoundingClientRect(); if (!b.width) continue;
+    const t = n.data[i], y = Math.round(b.top);
+    if (!cur || Math.abs(y - cur.top) > b.height * 0.5) { cur = { top: y, x: b.left, y: (b.top + b.bottom) / 2, text: '' }; out.push(cur); }
+    cur.text += t; }
+  return out;
+}
+function heat() {
+  const btns = [...front.querySelectorAll('[aria-pressed=true]'), ...(back.classList.contains('on') ? backOpts.querySelectorAll('[aria-pressed=true]') : [])];
+  document.querySelectorAll('.opts button.hot').forEach(b => { if (!btns.includes(b)) b.classList.remove('hot'); });
+  if (!btns.length || col.classList.contains('out')) { hotFx.set([]); return; }
+  const items = [];
+  btns.forEach(b => { const cs = getComputedStyle(b), f = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`, br = b.getBoundingClientRect(), fs = parseFloat(cs.fontSize);
+    items.push({ dot: 5, x: br.left + 4.5, y: br.top + parseFloat(cs.paddingTop) + fs * 0.45 + 4.5 }); b.classList.add('hot'); });   // 只有圆点做成热弥散，字不动
+  // 竖屏时题目栏自己滚：滚出可见范围（上面那段渐隐区之外）的就不画
+  const cr = col.getBoundingClientRect(), top = cr.top + (document.body.classList.contains('stack') ? innerHeight * 0.06 : 0);
+  hotFx.set(items.filter(it => it.y > top && it.y < cr.bottom - 6), STAGE);
+}
+let heatRaf = 0; const heatSoon = () => { cancelAnimationFrame(heatRaf); heatRaf = requestAnimationFrame(() => requestAnimationFrame(heat)); };
+col.addEventListener('scroll', heatSoon, { passive: true }); addEventListener('resize', heatSoon);
+const done = () => score === null ? false : true;
 function showItem(i) {
   const it = ITEMS[i];
   $('no').textContent = it.no; $('tx').textContent = it.text; $('fq').textContent = it.q;
   front.innerHTML = it.front.map((t, v) => `<button data-v="${v}">${t}</button>`).join('') + `<button class="na" data-v="na">${L('无法代入', 'Can’t picture it')}</button>`;
   $('bq').textContent = L('说这句话的时候，你心里——', 'As you say it, inside you —');
   backOpts.innerHTML = it.back.map((t, j) => `<button data-b="${j}">${t}</button>`).join('');
-  back.classList.remove('on'); next.classList.remove('on'); next.textContent = i < ITEMS.length - 1 ? L('下一题', 'Next') : L('下一张桌子', 'Next table');
+  back.classList.remove('on'); next.classList.remove('on'); score = null;
+  next.textContent = i < ITEMS.length - 1 ? L('下一题', 'Next') : (+STG < 3 ? L('下一张桌子', 'Next table') : L('看我的温度', 'See my temperature'));
+  prev.textContent = L('上一题', 'Back'); prev.classList.toggle('on', i > 0 || !!PREV_PAGE);
+  col.scrollTop = 0;
   front.querySelectorAll('button').forEach(b => b.onclick = () => {
-    press(front, b); press(backOpts, null);
-    if (b.dataset.v === 'na') { save(ITEMS[idx], null, null); back.classList.remove('on'); next.classList.add('on'); go(GRAY); return; }
+    clearTimeout(autoT); press(front, b); press(backOpts, null);
+    if (b.dataset.v === 'na') { score = -1; save(ITEMS[idx], null, null); back.classList.remove('on'); next.classList.add('on'); go(GRAY); heatSoon(); auto(); return; }
     score = +b.dataset.v; depth = 0.5; save(ITEMS[idx], score, null); back.classList.toggle('on', score > 0); next.classList.toggle('on', score === 0);
-    go(heatState(score, depth));
+    go(heatState(score, depth)); heatSoon();
+    if (score === 0) auto();
+    else setTimeout(() => back.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 60);
   });
   backOpts.querySelectorAll('button').forEach(b => b.onclick = () => {
-    press(backOpts, b); depth = [0, 1, 0.5][+b.dataset.b]; save(ITEMS[idx], score, ['surface', 'deep', 'unsure'][+b.dataset.b], +b.dataset.b); next.classList.add('on'); go(heatState(score, depth));
+    clearTimeout(autoT); press(backOpts, b); depth = [0, 1, 0.5][+b.dataset.b]; save(ITEMS[idx], score, ['surface', 'deep', 'unsure'][+b.dataset.b], +b.dataset.b);
+    next.classList.add('on'); go(heatState(score, depth)); heatSoon(); auto();
   });
+  // 答过的：把原来的选择放回去
+  const mine = TW_answers()[it.shot + STG];
+  if (mine) {
+    const fb = front.querySelector(`[data-v="${mine.score == null ? 'na' : mine.score}"]`); if (fb) press(front, fb);
+    score = mine.score == null ? -1 : mine.score;
+    if (mine.score) { back.classList.add('on'); const bi = it.back.indexOf(mine.feel); if (bi >= 0) { press(backOpts, backOpts.children[bi]); depth = [0, 1, 0.5][bi]; next.classList.add('on'); } }
+    else next.classList.add('on');
+    setTimeout(() => go(mine.score == null ? GRAY : heatState(mine.score, mine.score ? depth : 0.5), 1600), 50);
+  }
+  heatSoon();
+}
+// 答完这一题：停一下让颜色晕开，再自动去下一题
+function auto() { if (REVIEW) return; clearTimeout(autoT); autoT = setTimeout(() => step(1), 1500); }
+function step(d) {
+  clearTimeout(autoT); if (moving) return;
+  const j = idx + d;
+  if (j >= ITEMS.length) { location.href = './' + NEXT_PAGE; return; }   // 这张桌子答完：去下一张（最后一张去看自己的温度）
+  if (j < 0) { if (PREV_PAGE) location.href = `./${PREV_PAGE}?shot=${ITEMS[ITEMS.length - 1].shot}`; return; }
+  moving = true; pulse(ITEMS[idx].shot); idx = j;
+  col.classList.add('out'); hotFx.set([]);
+  setTimeout(() => { showItem(idx); col.classList.remove('out'); moving = false; heatSoon(); }, 900);
+  moveTo(ITEMS[idx].shot);
+  setTimeout(() => go(GRAY, 2000), 700);
 }
 // 答案存在本机（tw_answers_v2），热像镜子读它；格子名 = 镜头字母 + 台号，比如 A1
 function save(it, sc, acting, bi) {
-  try { const a = JSON.parse(localStorage.getItem('tw_answers_v2') || '{}'); const cell = it.shot + '2';
+  try { const a = JSON.parse(localStorage.getItem('tw_answers_v2') || '{}'); const cell = it.shot + STG;
     a[cell] = { score: sc, acting: sc ? acting : null, no: it.no, ans: sc == null ? L('无法代入', 'Can’t picture it') : it.front[sc], feel: sc && bi != null ? it.back[bi] : null };
     localStorage.setItem('tw_answers_v2', JSON.stringify(a)); } catch (e) {}
 }
-next.onclick = () => {
-  if (idx === ITEMS.length - 1) { location.href = './小桌_新布景_轮廓.html'; return; }   // 这张桌子答完：去下一张（最后一张去看自己的温度）
-  pulse(ITEMS[idx].shot);
-  idx = (idx + 1) % ITEMS.length;
-  col.classList.add('out');
-  setTimeout(() => { showItem(idx); col.classList.remove('out'); }, 900);
-  moveTo(ITEMS[idx].shot);
-  setTimeout(() => go(GRAY, 2000), 700);
-};
+next.onclick = () => step(1);
+prev.onclick = () => step(-1);
+if (Q.has('cam')) document.body.classList.add('camtool');   // 调镜头的工具只在 ?cam 时出现
 const START = Q.get('shot') || 'A'; idx = Math.max(0, ITEMS.findIndex(it => it.shot === START));
 showItem(idx); toShot(START);
-if (Q.has('review')) {   // 回顾：把当时选的标出来，热痕照当时的分数
-  const mine = TW_answers()[ITEMS[idx].shot + '2'];
-  if (mine) { const fb = front.querySelector(`[data-v="${mine.score == null ? 'na' : mine.score}"]`); if (fb) press(front, fb);
-    if (mine.score) { back.classList.add('on'); const bi = ITEMS[idx].back.indexOf(mine.feel); if (bi >= 0) press(backOpts, backOpts.children[bi]); } }
+if (document.fonts) document.fonts.ready.then(heatSoon); setTimeout(heatSoon, 1200);   // 字体到了再画一次（打开时就有答过的选项）
+if (REVIEW) {   // 回顾：把当时选的标出来，热痕照当时的分数；不能改
   next.classList.add('on'); next.textContent = L('回到我的温度', 'Back to my temperature'); next.onclick = () => { location.href = './热像镜子.html?open'; };
+  prev.classList.remove('on');
   front.querySelectorAll('button').forEach(b => b.disabled = true); backOpts.querySelectorAll('button').forEach(b => b.disabled = true);
 }
 if (Q.has('score')) { const st = heatState(+Q.get('score'), Q.has('depth') ? +Q.get('depth') : 0.5); cur = st; setAB('A', st); setAB('B', st); }
 window.__go = (s, dp = 0.5) => go(s < 0 ? GRAY : heatState(s, dp), 10);
-window.__shot = k => toShot(k); window.__move = moveTo; window.__pulse = pulse; window.__next = () => next.onclick();
+window.__shot = k => toShot(k); window.__move = moveTo; window.__pulse = pulse; window.__next = () => step(1);
 
 /* 编辑：每个镜头的角度可以拖了以后存下来 */
 const curShot = () => camAnim ? null : ITEMS[idx].shot;

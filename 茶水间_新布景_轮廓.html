@@ -1,6 +1,7 @@
 <!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>同温层 · 茶水间 · 轮廓版</title><link rel="icon" href="./favicon.svg"><link rel="stylesheet" href="./css/zh.css"><script src="./js/lang.js"></script><script src="./js/progress.js"></script><script src="./js/grd.js"></script><script src="./js/heatTitle.js"></script>
+<script>try { const v = sessionStorage.getItem('tw_veil'); if (v) { document.documentElement.classList.add('veiled'); document.documentElement.style.setProperty('--veil', v); } } catch (e) {}</script>
 <script type="importmap">{ "imports": {
   "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
   "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/" } }</script>
@@ -28,6 +29,11 @@ button{all:unset;cursor:pointer}
 #cam{position:fixed;right:3vw;bottom:3.5vh;font-size:12px;letter-spacing:.06em;display:flex;gap:14px;align-items:center;opacity:.75}
 #cam[hidden]{display:none}#cam button{border-bottom:1px solid currentColor}#cam .ok{opacity:.6}
 body.still .col,body.still .mark,body.still #cam{display:none}
+/* 换桌子：先慢慢晕上一层下一张桌子的颜色，再换页；新的一张盖着同一层色进来，慢慢褪开 */
+#veil{position:fixed;inset:0;z-index:20;pointer-events:none;opacity:0;background:var(--veil,#fff);transition:opacity .95s cubic-bezier(.5,0,.3,1)}
+#veil.on{opacity:1}
+html.veiled #veil{opacity:1;transition:none}
+#veil::after{content:"";position:absolute;inset:0;opacity:.18;mix-blend-mode:multiply;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
 #cam{display:none}body.camtool #cam{display:flex}
 .nav{display:flex;gap:28px;align-items:baseline;margin-top:3.4vh}.nav .next{margin-top:0}
 .prev{font-size:14px;letter-spacing:.08em;opacity:.55;display:none}.prev.on{display:inline-block}.prev:hover{opacity:1}
@@ -58,7 +64,7 @@ body.stack #front.picked button:not([aria-pressed=true]){display:none}
   <div id="back"><p class="q" id="bq">说这句话的时候，你心里——</p><div class="opts" id="backOpts"></div></div>
   <div class="nav"><button class="prev" id="prev">上一题</button><button class="next" id="next">下一题</button></div>
 </div>
-<canvas id="hot"></canvas>
+<canvas id="hot"></canvas><div id="veil"></div>
 <div id="cam"><span id="camTx"></span><button id="camSave">定下这个镜头</button><span class="ok" id="camOk"></span></div>
 <script type="module">
 import * as THREE from 'three';
@@ -443,11 +449,19 @@ function showItem(i) {
 }
 // 答完这一题：停一下让颜色晕开，再自动去下一题
 function auto() { if (REVIEW) return; clearTimeout(autoT); autoT = setTimeout(() => step(1), 1500); }
+// 换桌子：用下一张桌子那一台的颜色晕一层，盖住了再换页
+function leave(url, stage) {
+  const c = (t, a) => `rgba(${TW_grdAt(stage, t).map(Math.round)},${a})`;
+  const bg = `radial-gradient(70% 60% at 28% 38%, ${c(0.92, 0.95)}, ${c(0.92, 0)} 70%), radial-gradient(60% 70% at 74% 66%, ${c(0.45, 0.85)}, ${c(0.45, 0)} 70%), radial-gradient(80% 80% at 50% 50%, ${c(0.05, 0.9)}, ${c(0.05, 0.6)})`;
+  try { sessionStorage.setItem('tw_veil', bg); } catch (e) {}
+  const v = $('veil'); v.style.background = bg; v.classList.add('on'); clearTimeout(autoT); moving = true;
+  setTimeout(() => { location.href = url; }, 950);
+}
 function step(d) {
   clearTimeout(autoT); if (moving) return;
   const j = idx + d;
-  if (j >= ITEMS.length) { location.href = './' + NEXT_PAGE; return; }   // 这张桌子答完：去下一张（最后一张去看自己的温度）
-  if (j < 0) { if (PREV_PAGE) location.href = `./${PREV_PAGE}?shot=${ITEMS[ITEMS.length - 1].shot}`; return; }
+  if (j >= ITEMS.length) { leave('./' + NEXT_PAGE, ['mid', 'back', 'front'][+STG - 1]); return; }   // 这张桌子答完：去下一张（最后一张去看自己的温度）
+  if (j < 0) { if (PREV_PAGE) leave(`./${PREV_PAGE}?shot=${ITEMS[ITEMS.length - 1].shot}`, ['front', 'front', 'mid'][+STG - 1]); return; }
   moving = true; pulse(ITEMS[idx].shot); idx = j;
   col.classList.add('out'); hotFx.set([]);
   setTimeout(() => { showItem(idx); col.classList.remove('out'); moving = false; heatSoon(); }, 900);
@@ -465,7 +479,9 @@ prev.onclick = () => step(-1);
 if (Q.has('cam')) document.body.classList.add('camtool');   // 调镜头的工具只在 ?cam 时出现
 const START = Q.get('shot') || 'A'; idx = Math.max(0, ITEMS.findIndex(it => it.shot === START));
 showItem(idx); toShot(START);
-if (document.fonts) document.fonts.ready.then(heatSoon); setTimeout(heatSoon, 1200);   // 字体到了再画一次（打开时就有答过的选项）
+if (document.fonts) document.fonts.ready.then(heatSoon); setTimeout(heatSoon, 1200);
+// 从上一张桌子过来的：画面出来了再把那层色慢慢褪开
+if (document.documentElement.classList.contains('veiled')) setTimeout(() => { document.documentElement.classList.remove('veiled'); $('veil').style.transition = 'opacity 1.4s cubic-bezier(.4,0,.2,1)'; try { sessionStorage.removeItem('tw_veil'); } catch (e) {} }, 450);   // 字体到了再画一次（打开时就有答过的选项）
 if (REVIEW) {   // 回顾：把当时选的标出来，热痕照当时的分数；不能改
   next.classList.add('on'); next.textContent = L('回到我的温度', 'Back to my temperature'); next.onclick = () => { location.href = './热像镜子.html?open'; };
   prev.classList.remove('on');

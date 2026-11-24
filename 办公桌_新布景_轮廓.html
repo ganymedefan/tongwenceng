@@ -565,6 +565,19 @@ $('camSave').onclick = () => {
   console.log('TW_CAMERA office_set', k, JSON.stringify(v)); $('camOk').textContent = `镜头 ${k} 已存`;
 };
 
+// 排查用：网址带 ?dbg 打开一次以后，这台手机上问卷右上角会出一小块数字（带 ?nodbg 再打开一次就关掉）
+try { if (Q.has('dbg')) localStorage.setItem('tw_dbg', '1'); if (Q.has('nodbg')) localStorage.removeItem('tw_dbg'); } catch (e) {}
+if ((() => { try { return localStorage.getItem('tw_dbg'); } catch (e) { return null; } })()) {
+  const box = document.createElement('pre'); box.style.cssText = 'position:fixed;right:4px;top:4px;z-index:99;font:10px/1.35 monospace;background:rgba(255,255,255,.85);color:#000;padding:4px;margin:0;pointer-events:none;max-width:60vw;white-space:pre-wrap';
+  document.body.appendChild(box); let nF = 0; renderer.domElement.addEventListener('webglcontextlost', () => { box.dataset.lost = '1'; });
+  setInterval(() => { const g = renderer.getContext(), fe = window.frameElement, af = getComputedStyle(document.body, '::after');
+    box.textContent = [`win ${innerWidth}x${innerHeight} dpr ${devicePixelRatio}`, `buf ${size.x}x${size.y} gl2 ${renderer.capabilities.isWebGL2}`,
+      `stack ${document.body.classList.contains('stack')} ct ${ctWant.toFixed(3)}/${ctNow.toFixed(3)}`, `after top ${af.top}`,
+      `cam l${camera.left.toFixed(3)} r${camera.right.toFixed(3)} t${camera.top.toFixed(3)} b${camera.bottom.toFixed(3)} z${camera.zoom.toFixed(2)}`,
+      `view az${view.az.toFixed(1)} po${view.polar.toFixed(1)} tg ${view.target.toArray().map(x => x.toFixed(2))}`,
+      `ready ${!!window.__ready} anim ${!!camAnim} lost ${g.isContextLost()}${box.dataset.lost ? '!' : ''} pre ${PRE}`,
+      `frame ${fe ? getComputedStyle(fe).position + ' ' + fe.className + ' ' + Math.round(fe.getBoundingClientRect().height) : 'none'}`].join('\n'); }, 500);
+}
 renderer.setAnimationLoop(t => {
   if (preWait && window.__ready && preFrames > 3) return;
   if (window.__ready) preFrames++;

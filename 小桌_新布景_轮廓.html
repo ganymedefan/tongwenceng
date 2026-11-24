@@ -41,6 +41,9 @@ html.veiled #veil{opacity:1;transition:none}
 .col{z-index:2}
 #hot{position:fixed;inset:0;width:100vw;height:100vh;pointer-events:none;z-index:1}
 body.stack .mark{left:18px;top:14px;width:88px}
+#loadTx{position:fixed;left:0;right:0;top:15vh;text-align:center;font-size:12.5px;letter-spacing:.08em;opacity:.55;z-index:3;transition:opacity .8s;pointer-events:auto}
+body:not(.stack) #loadTx{top:50%;left:34%}
+#loadTx.done{opacity:0;pointer-events:none}
 body.stack .col{left:0;right:0;width:auto;top:var(--ct,30vh);bottom:0;transform:none;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;
   padding:3.2vh max(20px,6vw) 3vh;z-index:2}
 /* 竖屏：题目栏下面垫白（热光晕画在白上面、字下面） */
@@ -240,6 +243,10 @@ const traceMat = name => {
     fragmentShader: 'uniform sampler2D map; uniform float uHeat, uPulse; varying vec2 vUv; void main(){ float a = texture2D(map, vUv).a; gl_FragColor = vec4(0.0, uHeat * a, uPulse * a, 1.0); }',
   });
 };
+// 模型七八兆，手机网慢时要一会儿：场景那块先写"加载中 xx%"，到了就淡掉；没加载出来可以点一下重试
+const loadEl = document.createElement('div'); loadEl.id = 'loadTx'; document.body.appendChild(loadEl);
+window.__loadPct = 0; window.__loadErr = '';
+function loadModel() { loadEl.textContent = L('模型加载中', 'Loading the scene'); loadEl.onclick = null;
 new GLTFLoader().load('./models/room_set.glb', g => {
   g.scene.traverse(o => {
     if (!o.isMesh) return;
@@ -247,8 +254,10 @@ new GLTFLoader().load('./models/room_set.glb', g => {
     if (n.startsWith('trace:')) { const [, t, key] = n.split(':'); o.material = traceMat(t); o.renderOrder = 2; traces[key] = o.material; }
     else o.material = objMat(HEAT[n] ?? 0.3, WARM[n] ?? 0, n === 'desk_top' || n === 'wall');
   });
-  scene.add(g.scene); window.__scene = scene; window.__traces = traces; window.__ready = true;
-});
+  scene.add(g.scene); window.__scene = scene; window.__traces = traces; window.__ready = true; loadEl.classList.add('done');
+}, e => { if (e.total) { window.__loadPct = Math.min(99, Math.round(e.loaded / e.total * 100)); loadEl.textContent = L(`模型加载中 ${window.__loadPct}%`, `Loading the scene ${window.__loadPct}%`); } },
+   err => { window.__loadErr = String(err && err.message || err); loadEl.textContent = L('场景没加载出来，点这里再试一次', 'The scene did not load — tap to try again'); loadEl.onclick = loadModel; }); }
+loadModel();
 
 /* ---------- 合成（和 A2 那版一样：清晰层 + 三层弥散 + 光边 + 颗粒） ---------- */
 const VS = 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }';
@@ -575,7 +584,7 @@ if ((() => { try { return localStorage.getItem('tw_dbg'); } catch (e) { return n
       `stack ${document.body.classList.contains('stack')} ct ${ctWant.toFixed(3)}/${ctNow.toFixed(3)}`, `after top ${af.top}`,
       `cam l${camera.left.toFixed(3)} r${camera.right.toFixed(3)} t${camera.top.toFixed(3)} b${camera.bottom.toFixed(3)} z${camera.zoom.toFixed(2)}`,
       `view az${view.az.toFixed(1)} po${view.polar.toFixed(1)} tg ${view.target.toArray().map(x => x.toFixed(2))}`,
-      `ready ${!!window.__ready} anim ${!!camAnim} lost ${g.isContextLost()}${box.dataset.lost ? '!' : ''} pre ${PRE}`,
+      `load ${window.__loadPct}% ${window.__loadErr}`, `ready ${!!window.__ready} anim ${!!camAnim} lost ${g.isContextLost()}${box.dataset.lost ? '!' : ''} pre ${PRE}`,
       `frame ${fe ? getComputedStyle(fe).position + ' ' + fe.className + ' ' + Math.round(fe.getBoundingClientRect().height) : 'none'}`].join('\n'); }, 500);
 }
 renderer.setAnimationLoop(t => {

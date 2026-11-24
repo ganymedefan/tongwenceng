@@ -21,6 +21,10 @@ body { font-family: "Exposure", Georgia, serif; color: #1b181d; -webkit-font-smo
 #wrap { position: fixed; left: 0; right: 0; top: 0; will-change: transform; }
 .sec { height: var(--h, 100vh); position: relative; overflow: hidden; }
 .sec iframe { display: block; width: 100%; height: 100%; border: 0; background: #fff; }
+/* 问卷那一屏有两层：上面是正在答的桌子，底下悄悄备着下一张；换桌时底下那层在甩得最快的一下淡上来 */
+#survey iframe { position: absolute; inset: 0; z-index: 2; }
+#survey iframe.under { z-index: 1; opacity: 0; pointer-events: none; }
+#survey iframe.under.in { z-index: 3; opacity: 1; transition: opacity .3s linear; }
 
 /* 下拉提醒：滚到数据页底下再往下拉才出现 */
 #wash { position: fixed; left: 0; right: 0; height: 34vh; z-index: 4; pointer-events: none; opacity: 0;
@@ -33,6 +37,9 @@ body { font-family: "Exposure", Georgia, serif; color: #1b181d; -webkit-font-smo
 .pull .bar { display: block; width: 120px; height: 2px; margin: 10px auto 0; background: rgba(27,24,29,.12); border-radius: 2px; overflow: hidden; }
 .pull .bar i { display: block; height: 100%; width: 0; background: #1b181d; }
 .lang-zh .pull { font-weight: 330; letter-spacing: .12em; }
+/* 提醒出现时，数据页整页往上让出一条，提醒落在这条里，不压数据页的字 */
+#pband { position: fixed; left: 0; right: 0; bottom: 0; height: 96px; z-index: 5; pointer-events: none; opacity: 0;
+  background: linear-gradient(rgba(255,255,255,0), rgba(255,255,255,.92) 45%, #fff); }
 
 /* 顶部导航：从第二屏开始，滑动时出现、停下一会儿就淡出；各页自己的 logo 和导航在滑动站里都藏了 */
 #bar { position: fixed; left: 0; right: 0; top: 0; z-index: 8; display: flex; justify-content: space-between; align-items: center;
@@ -61,7 +68,7 @@ body { font-family: "Exposure", Georgia, serif; color: #1b181d; -webkit-font-smo
 <header id="bar"><a class="lg" data-i="0"><img id="lgImg" src="./logo/logo_彩虹.png" alt="In the Stratospheric Realm"></a>
   <nav><a data-i="1"></a><a data-i="2"></a><a data-i="3"></a><a data-i="4"></a><a class="lang" id="langA"></a></nav></header>
 <div id="wash"></div>
-<div class="pull" id="pull"><span class="arr">↓</span><span id="pt"></span><span class="bar"><i id="pb"></i></span></div>
+<div id="pband"></div><div class="pull" id="pull"><span class="arr">↓</span><span id="pt"></span><span class="bar"><i id="pb"></i></span></div>
 
 <script>
 document.getElementById('pt').textContent = L('下拉进入问卷', 'Pull to enter the survey');
@@ -75,19 +82,20 @@ const bar = document.getElementById('bar'), barLinks = [...bar.querySelectorAll(
 { const la = document.getElementById('langA'); la.textContent = TW_LANG === 'en' ? '中文' : 'English'; la.onclick = () => { try { localStorage.setItem('tw_lang', TW_LANG === 'en' ? 'zh' : 'en'); } catch (e) {} location.reload(); }; }
 let barSeen = -1e9, barHover = false;
 const poke = () => { barSeen = performance.now(); };
-barLinks.forEach(a => a.onclick = () => { const i = +a.dataset.i, f = secs[i].querySelector('iframe'); if (!f.getAttribute('src')) f.src = f.dataset.src; if (i >= 3) armed = false; goTo(secs[i].offsetTop); poke(); });
+barLinks.forEach(a => a.onclick = () => { const i = +a.dataset.i, f = i === 3 ? svA : secs[i].querySelector('iframe'); if (!f.getAttribute('src')) f.src = f.dataset.src; if (i >= 3) armed = false; goTo(secs[i].offsetTop); poke(); });
 bar.addEventListener('pointerenter', () => { barHover = true; }); bar.addEventListener('pointerleave', () => { barHover = false; poke(); });
 addEventListener('message', e => { if (e.data && e.data.tw === 'near-top') poke(); });
 // 各页报上来的：自己最上面那一条是深还是浅（深 = 导航用白字和白字 logo）
 const inkBy = ['dark', 'dark', 'dark', 'dark', 'dark'], lgImg = document.getElementById('lgImg'); let barInk = 'dark';
-addEventListener('message', e => { if (!e.data || e.data.tw !== 'ink') return; const i = [...document.querySelectorAll('#wrap iframe')].findIndex(f => f.contentWindow === e.source); if (i >= 0) inkBy[i] = e.data.v; });
+addEventListener('message', e => { if (!e.data || e.data.tw !== 'ink') return; const f = [...document.querySelectorAll('#wrap iframe')].find(f => f.contentWindow === e.source); if (!f || f.classList.contains('under')) return; inkBy[secs.indexOf(f.closest('section'))] = e.data.v; });
 function setBarInk(k) { if (k === barInk) return; barInk = k; bar.classList.toggle('light', k === 'light'); lgImg.src = k === 'light' ? './logo/logo_彩虹_白字.png' : './logo/logo_彩虹.png'; }
+let hintK = 0; const pband = document.getElementById('pband');
 const wrap = document.getElementById('wrap'), pull = document.getElementById('pull'), pb = document.getElementById('pb');
 
 // 到了附近才加载
 const frames = [...document.querySelectorAll('iframe[data-src]')];
 // 每次发布换一个版本号：各页地址带上它，手机就不会继续用缓存里的旧页面
-const BUILD = '20261123d'; frames.forEach(f => { f.dataset.src += (f.dataset.src.includes('?') ? '&' : '?') + 'v=' + BUILD; });
+const BUILD = '20261124a'; frames.forEach(f => { f.dataset.src += (f.dataset.src.includes('?') ? '&' : '?') + 'v=' + BUILD; });
 const secs = [...document.querySelectorAll('#wrap > section')];
 const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting && !e.target.src) e.target.src = e.target.dataset.src; }), { rootMargin: '60% 0px' });
 frames.forEach(f => io.observe(f));
@@ -151,8 +159,12 @@ addEventListener('touchend', () => { oy = null; }, { passive: true });
   wash.style.opacity = Math.min(1, best * 1.6).toFixed(3);   // 交界在屏幕中间时最糊，停在某一屏时（交界在边上）看不见
   if (now - lastPull > 600) need *= Math.exp(-2.5 * dt);               // 松手（停下超过半秒）：慢慢弹回
   const k = need / GATE, lift = 90 * (1 - Math.exp(-k * 2.2));        // 页面被拉起一点，越拉越费劲
-  wrap.style.transform = `translate3d(0, ${(-cur - (need > 1 ? lift : 0)).toFixed(1)}px, 0)`;
-  pull.classList.toggle('on', armed && (need > 4 || (arrived && now - arrived < 4000)));   // 到了这儿还想往下：提醒要进问卷了
+  const hintOn = armed && (need > 4 || (arrived && now - arrived < 4000));   // 到了这儿还想往下：提醒要进问卷了
+  hintK += ((hintOn ? 1 : 0) - hintK) * (1 - Math.exp(-7 * dt));
+  const room = 84 * hintK;                                             // 提醒出现：整页先让出一条
+  wrap.style.transform = `translate3d(0, ${(-cur - Math.max(room, need > 1 ? room + lift * 0.6 : 0)).toFixed(1)}px, 0)`;
+  pband.style.opacity = hintK.toFixed(3);
+  pull.classList.toggle('on', hintOn);
   pb.style.width = Math.min(100, k * 100).toFixed(1) + '%';
   pull.querySelector('.arr').style.transform = `translateY(${(k * 6).toFixed(1)}px)`;
   // 导航：首页那一屏不出；滑动中、刚停下 1.6 秒内、鼠标在上面时出现
@@ -172,19 +184,45 @@ const pageOf = f => { try { return base(f.contentWindow.location.pathname) + f.c
 // 翻到某一页；带参数或换了桌子，就把那一屏换成这个地址
 function show(href, smooth = true) {
   const i = MAP[base(href)]; if (i == null) { location.href = href; return; }
-  const f = secs[i].querySelector('iframe'), want = './' + href.replace(/^\.\//, '');
+  const f = i === 3 ? svA : secs[i].querySelector('iframe'), want = './' + href.replace(/^\.\//, '');
   if (href.includes('?') || base(href) !== base(f.getAttribute('src') || f.dataset.src)) f.src = want;
   else if (!f.getAttribute('src')) f.src = f.dataset.src;
   if (i >= 3) armed = false;                                          // 点链接过去的：不用拉
   goTo(secs[i].offsetTop, smooth);
 }
 // 页面里用脚本跳走的（答完一张桌子去下一张、最后去看自己的温度、回顾、重新答题）：落到它该在的那一屏
-frames.forEach((f, k) => f.addEventListener('load', () => {
+const hook = f => f.addEventListener('load', () => {
   const pg = pageOf(f); if (!pg) return; const i = MAP[base(pg)];
   if (i == null || secs[i] === f.closest('section')) return;
   f.src = f.dataset.src;                                              // 这一屏回到原来的页
   show(pg);
-}));
+});
+frames.forEach(hook);
+// ───── 换桌子：摇臂甩过去 ─────
+// 正在答的桌子（svA）一开始答题，就让外层在它底下备好下一张（svB，低分辨率、几乎不画）。
+// 点"下一张桌子"：svA 慢慢起、越甩越快地横着甩出去；甩到最快那一下，svB 淡上来、接着同一个速度甩进来、慢慢停稳。
+const svSec = secs[3]; let svA = svSec.querySelector('iframe'), svB = null, svBHref = '', svBReady = false, swingWant = null;
+const withV = h => h + (h.includes('?') ? '&' : '?') + 'v=' + BUILD;
+function preload(href) {
+  if (!svB) { svB = document.createElement('iframe'); svB.title = 'Survey'; svB.className = 'under'; svB.dataset.src = frames[3].dataset.src; svSec.appendChild(svB); hook(svB); }
+  if (svBHref === href) return; svBHref = href; svBReady = false; svB.src = withV(href);
+}
+function swing() {
+  const T = swingWant.out || 1150, A = svA, B = svB; swingWant = null;
+  A.contentWindow.postMessage({ tw: 'swing-go' }, '*');
+  setTimeout(() => { B.contentWindow.postMessage({ tw: 'arrive' }, '*'); B.classList.add('in'); }, T - 260);
+  setTimeout(() => {
+    B.style.transition = 'none'; B.classList.remove('under', 'in'); A.style.transition = 'none'; A.classList.add('under');
+    svA = B; svB = A; svBHref = ''; svBReady = false; A.src = 'about:blank';
+    requestAnimationFrame(() => { A.style.transition = B.style.transition = ''; });
+  }, T + 120);
+}
+addEventListener('message', e => {
+  const m = e.data; if (!m || !m.tw) return;
+  if (m.tw === 'pre' && e.source === svA.contentWindow) preload(m.href);
+  if (m.tw === 'swing' && e.source === svA.contentWindow) { swingWant = m; preload(m.href); if (svBReady) swing(); }
+  if (m.tw === 'ready' && svB && e.source === svB.contentWindow) { svBReady = true; if (swingWant) swing(); }
+});
 addEventListener('message', e => {
   const m = e.data; if (!m || !m.tw) return;
   if (m.tw === 'wheel') wheel(m.fling && armed && Math.abs(cur - WALL()) < 8 ? 0 : m.dy);   // 松手的惯性不算进阻尼的拉力（要手指真的往下拉）

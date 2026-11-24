@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>热像镜子</title>
-<link rel="icon" href="./favicon.svg"><link rel="stylesheet" href="./css/zh.css"><script src="./js/lang.js"></script><script src="./js/progress.js"></script>
+<link rel="icon" href="./favicon.svg"><link rel="stylesheet" href="./css/zh.css"><script src="./js/lang.js"></script><script src="./js/progress.js"></script><script src="./js/grd.js?v=1124"></script>
 <script type="importmap">{ "imports": {
   "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
   "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/" } }</script>
@@ -57,7 +57,10 @@ canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block;
 .review #rvx { font-size: 28px; cursor: pointer; color: #1b181d; text-decoration: none; }
 .review ol { list-style: none; }
 .review li { border-top: 1px solid #ebe8ea; padding: 18px 0; display: grid; grid-template-columns: 9em 1fr auto; gap: 18px; align-items: baseline; cursor: pointer; }
-.review li:hover { background: #faf8f9; }
+.review ol { position: relative; }
+.review li { position: relative; z-index: 1; }
+/* 九行底下是同一片弥散：每一行在自己那条里晕开那一台的颜色，分数越高越浓、越开；九团连成一片一起慢慢呼吸 */
+#rvf { position: absolute; left: -24px; right: -24px; top: -20px; bottom: -20px; width: calc(100% + 48px); height: calc(100% + 40px); z-index: 0; pointer-events: none; filter: blur(14px) saturate(1.05); opacity: .9; }
 .review li .k { font-size: 13px; color: rgba(27,24,29,.55); }
 .review li .a { font-size: 16px; line-height: 1.55; color: #1b181d; }
 .review li .a small { display: block; font-size: 13px; color: rgba(27,24,29,.55); margin-top: 4px; }
@@ -380,6 +383,35 @@ if (LOCKED) {
   document.getElementById('rvl').innerHTML = TW_CELLS.map(c => { const m = PROG.a[c], w = TW_where(c);
     const dp = m.score == null ? '' : `&score=${m.score}&depth=${m.acting === 'deep' ? 1 : m.acting === 'unsure' ? 0.5 : 0}`;
     return `<li data-href="${w.page}?shot=${w.shot}${dp}&review"><span class="k">${REL3[c[1]]} · ${EV3[c[0]]}</span><span class="a">${m.ans || ''}${m.feel ? `<small>${m.feel}</small>` : ''}</span><span class="g">${m.score == null ? '—' : m.score + ' / 4'} →</span></li>`; }).join('');
+  { const ol = document.getElementById('rvl'), cv = document.createElement('canvas'); cv.id = 'rvf'; ol.prepend(cv);
+    const cx = cv.getContext('2d'), STN = ['front', 'mid', 'back'], rows = [...ol.querySelectorAll('li')];
+    const amt = TW_CELLS.map(c => { const m = PROG.a[c]; return m.score == null ? 0 : m.score / 4; }), cur = amt.map(() => 0);
+    let hov = -1; rows.forEach((li, i) => { li.onmouseenter = () => hov = i; li.onmouseleave = () => { if (hov === i) hov = -1; }; });
+    const draw = t => {
+      if (!reviewEl.classList.contains('on')) return requestAnimationFrame(draw);
+      const W = cv.clientWidth, H = cv.clientHeight, d = Math.min(devicePixelRatio, 1.5);
+      if (cv.width !== Math.round(W * d) || cv.height !== Math.round(H * d)) { cv.width = Math.round(W * d); cv.height = Math.round(H * d); }
+      cx.setTransform(d, 0, 0, d, 0, 0); cx.clearRect(0, 0, W, H);
+      const top0 = cv.getBoundingClientRect().top, T = t / 1000;
+      rows.forEach((li, i) => {
+        const r = li.getBoundingClientRect(), y = r.top - top0 + r.height / 2, rh = r.height;
+        const want = amt[i] + (hov === i ? 0.18 : 0); cur[i] += (want - cur[i]) * 0.04;   // 一开始从无慢慢晕出来；鼠标放上去那一行再浓一点
+        const a = cur[i], st = STN[+TW_CELLS[i][1] - 1];
+        const n = 3;
+        for (let j = 0; j < n; j++) {
+          // 同一阵"风"：所有团跟着同一个慢波走，行与行之间只差一点相位，所以是一起动的一片，不是各动各的
+          const ph = T * 0.32 - i * 0.42 + j * 2.1;
+          const x = W * (0.18 + 0.32 * j + 0.06 * Math.sin(ph)), yy = y + rh * 0.18 * Math.sin(ph * 0.8 + 1.3);
+          const rad = rh * (0.3 + 0.62 * a) * (1 + 0.12 * Math.sin(ph * 1.3)) * (j === 1 ? 1.2 : 1);
+          const c = TW_grdAt(st, 0.08 + 0.5 * a).map(Math.round), al = (0.05 + 0.6 * Math.pow(a, 1.4)) * (j === 1 ? 1 : 0.75);
+          const g = cx.createRadialGradient(x, yy, 0, x, yy, rad);
+          g.addColorStop(0, `rgba(${c},${al})`); g.addColorStop(0.55, `rgba(${c},${al * 0.45})`); g.addColorStop(1, `rgba(${c},0)`);
+          cx.fillStyle = g; cx.save(); cx.translate(x, yy); cx.scale(Math.min(2.2, W / rh / 1.1), 1); cx.translate(-x, -yy); cx.fillRect(x - rad, yy - rad, rad * 2, rad * 2); cx.restore();
+        }
+      });
+      requestAnimationFrame(draw);
+    };
+    requestAnimationFrame(draw); }
   document.getElementById('rvl').onclick = e => { const li = e.target.closest('li'); if (li) location.href = li.dataset.href; };
   document.getElementById('rv').onclick = () => reviewEl.classList.add('on');
   document.getElementById('rvx').onclick = () => reviewEl.classList.remove('on');

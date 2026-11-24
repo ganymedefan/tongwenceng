@@ -41,10 +41,10 @@ html.veiled #veil{opacity:1;transition:none}
 .col{z-index:2}
 #hot{position:fixed;inset:0;width:100vw;height:100vh;pointer-events:none;z-index:1}
 body.stack .mark{left:18px;top:14px;width:88px}
-body.stack .col{left:0;right:0;width:auto;top:30vh;top:30dvh;bottom:0;transform:none;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;
+body.stack .col{left:0;right:0;width:auto;top:var(--ct,30vh);bottom:0;transform:none;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;
   padding:3.2vh max(20px,6vw) 3vh;z-index:2}
 /* 竖屏：题目栏下面垫白（热光晕画在白上面、字下面） */
-body.stack::after{content:"";position:fixed;left:0;right:0;top:30vh;top:30dvh;bottom:0;background:linear-gradient(rgba(255,255,255,0),rgba(255,255,255,.94) 3vh,#fff 7vh);pointer-events:none;z-index:0}
+body.stack::after{content:"";position:fixed;left:0;right:0;top:calc(var(--ct,30vh) - 4vh);bottom:0;background:linear-gradient(rgba(255,255,255,0),rgba(255,255,255,.9) 4vh,#fff 6.5vh);pointer-events:none;z-index:0}
 body.stack .col>*{max-width:620px}
 body.stack .no{margin-bottom:.9vh;font-size:12px}
 body.stack .tx{font-size:15px;line-height:1.62}
@@ -56,7 +56,7 @@ body.stack .nav{margin:1.8vh 0 0}
 body.stack #front.picked button:not([aria-pressed=true]){display:none}
 </style></head><body>
 <a class="mark" href="./首页.html"><img src="./logo/logo_彩虹.png" alt="In the Stratospheric Realm 同温层"></a>
-<div class="col" id="col">
+<div class="col out" id="col">
   <p class="no" id="no"></p>
   <p class="tx" id="tx"></p>
   <p class="q" id="fq"></p>
@@ -343,9 +343,16 @@ function resize() {
   finalQuad.material.uniforms.px.value.set(1 / size.x, 1 / size.y);
   const stack = !STILL && (w <= 760 || a < 0.9); document.body.classList.toggle('stack', stack);   // 手机、竖着的平板：画面在上，题目在下
   const cx = !stack && !STILL ? 0.34 : 0;   // 宽屏：画面中心往右挪，让出左边的问题
-  const k = stack ? 1.45 : 1, oy = stack ? -0.7 * H * k : 0;   // 竖屏：场景中心放在离顶 15% 处（上面那三成里）
-  Object.assign(camera, { left: -H * k * a - cx * H * a, right: H * k * a - cx * H * a, top: H * k + oy, bottom: -H * k + oy });
-  camera.updateProjectionMatrix();
+  const k = stack ? 1.3 : 1; frK = k; frStack = stack;
+  Object.assign(camera, { left: -H * k * a - cx * H * a, right: H * k * a - cx * H * a });
+  frame(true);
+}
+// 竖屏：题目栏上面那块就是画面；场景中心放在那块的正中间（ctNow 慢慢追 ctWant，换题时场景跟着轻轻挪）
+let frK = 1, frStack = false, ctWant = 0.3, ctNow = 0.3;
+function frame(snap) {
+  if (snap) ctNow = ctWant;
+  const f = frStack ? Math.max(0.12, ctNow * 0.5) : 0.5, oy = frStack ? H * frK * (2 * f - 1) : 0;
+  camera.top = H * frK + oy; camera.bottom = -H * frK + oy; camera.updateProjectionMatrix();
 }
 addEventListener('resize', resize); resize();
 function blur(src, [a, b], sigmaPx) {
@@ -438,27 +445,50 @@ function showItem(i) {
   });
   // 答过的：把原来的选择放回去
   const mine = TW_answers()[it.shot + STG];
-  if (mine) {
+  if (mine && (REVIEW || sessCells().includes(it.shot + STG))) {
     const fb = front.querySelector(`[data-v="${mine.score == null ? 'na' : mine.score}"]`); if (fb) press(front, fb);
     score = mine.score == null ? -1 : mine.score;
     if (mine.score) { back.classList.add('on'); front.classList.add('picked'); const bi = it.back.indexOf(mine.feel); if (bi >= 0) { press(backOpts, backOpts.children[bi]); depth = [0, 1, 0.5][bi]; next.classList.add('on'); } }
     else next.classList.add('on');
     setTimeout(() => go(mine.score == null ? GRAY : heatState(mine.score, mine.score ? depth : 0.5), 1600), 50);
   }
+  fitCol();
   heatSoon();
 }
+function fitCol() {
+  if (!document.body.classList.contains('stack')) return;
+  const pk = front.classList.contains('picked'), bo = back.classList.contains('on'), st = col.style.cssText;
+  col.style.top = '0px'; col.style.bottom = 'auto'; col.style.overflow = 'visible';
+  front.classList.remove('picked'); back.classList.remove('on'); const h0 = col.scrollHeight;
+  front.classList.add('picked'); back.classList.add('on'); const h1 = col.scrollHeight;
+  front.classList.toggle('picked', pk); back.classList.toggle('on', bo); col.style.cssText = st;
+  const ct = Math.min(0.62, Math.max(0.3, 1 - (Math.max(h0, h1) + 8) / innerHeight));
+  ctWant = ct; document.body.style.setProperty('--ct', (ct * 100).toFixed(2) + 'vh');
+}
+addEventListener('resize', () => { fitCol(); frame(true); });
 // 答完这一题：停一下让颜色晕开，再自动去下一题
-function auto() { if (REVIEW) return; clearTimeout(autoT); autoT = setTimeout(() => step(1), 1500); }
+function auto() { /* 自动去下一题：11-23 先停掉，只用"下一题"按钮 */ }
 // 换桌子：像摄影机一样，从这张桌子横着飘出去（比同一张桌子里换物件快一点），新的一张从另一边飘进来
-const GLIDE = { side: 1.7, az: 16, polar: 5, zoom: 0.78, out: 1150, in: 1700 };
+const GLIDE = { side: 1.8, az: 20, polar: 9, zoom: 0.78, out: 1150, in: 1150 };   // 出去和进来一样长：接口处速度对得上
 // 飘多远按"画面横着能看到多宽"来定：手机竖屏看到的宽度窄，同样的距离会显得一下子甩过去，所以按比例缩，和电脑上看起来一样
 const sideAmt = () => GLIDE.side * Math.min(1, ((camera.right - camera.left) / 2) / (H * 1.6));
 const sideVec = (az, d) => new THREE.Vector3(Math.cos(D2R(az)), 0, -Math.sin(D2R(az))).multiplyScalar(d);
-function leave(url, dir) {
-  clearTimeout(autoT); moving = true; col.classList.add('out'); hotFx.set([]); readView(); unlimit(); controls.enabled = false;
+function swingOut(dir) {
+  readView(); unlimit(); controls.enabled = false;
   const f = { target: view.target.clone(), polar: view.polar, az: view.az, zoom: view.zoom };
   camAnim = { t0: performance.now(), dur: GLIDE.out, shot: ITEMS[idx].shot, glide: true, curve: 'in', from: f,
               to: { target: f.target.clone().add(sideVec(f.az, sideAmt() * dir)), polar: f.polar - GLIDE.polar, az: f.az + GLIDE.az * dir, zoom: f.zoom * GLIDE.zoom } };
+  go(GRAY, GLIDE.out);   // 甩出去的路上颜色退回灰
+}
+function leave(url, dir) {
+  clearTimeout(autoT); moving = true; col.classList.add('out'); hotFx.set([]);
+  if (TW_IN_FRAME && /轮廓/.test(url)) {   // 滑动站里：等外层把那张桌子在底下备好，再一起甩
+    let gone = false; const fb = setTimeout(() => { if (!gone) location.href = url; }, 8000);
+    addEventListener('message', function h(e) { if (!e.data || e.data.tw !== 'swing-go') return; removeEventListener('message', h); gone = true; clearTimeout(fb); swingOut(dir); });
+    parent.postMessage({ tw: 'swing', href: url + (url.includes('?') ? '&' : '?') + 'pre=' + dir, out: GLIDE.out }, '*');
+    return;
+  }
+  swingOut(dir);
   try { sessionStorage.setItem('tw_glide', String(dir)); sessionStorage.removeItem('tw_veil'); } catch (e) {}
   setTimeout(() => { location.href = url; }, GLIDE.out - 80);
 }
@@ -477,8 +507,12 @@ function step(d) {
 function save(it, sc, acting, bi) {
   try { const a = JSON.parse(localStorage.getItem('tw_answers_v2') || '{}'); const cell = it.shot + STG;
     a[cell] = { score: sc, acting: sc ? acting : null, no: it.no, ans: sc == null ? L('无法代入', 'Can’t picture it') : it.front[sc], feel: sc && bi != null ? it.back[bi] : null };
-    localStorage.setItem('tw_answers_v2', JSON.stringify(a)); } catch (e) {}
+    localStorage.setItem('tw_answers_v2', JSON.stringify(a));
+    const ss = sessCells(); if (!ss.includes(cell)) { ss.push(cell); sessionStorage.setItem('tw_sess', JSON.stringify(ss)); } } catch (e) {}
+  if (!preAsked && TW_IN_FRAME && /轮廓/.test(NEXT_PAGE)) { preAsked = true; parent.postMessage({ tw: 'pre', href: './' + NEXT_PAGE + '?pre=1' }, '*'); }   // 开始答这张桌子了：让外层先在底下把下一张桌子备好
 }
+function sessCells() { try { return JSON.parse(sessionStorage.getItem('tw_sess') || '[]'); } catch (e) { return []; } }
+let preAsked = false;
 next.onclick = () => step(1);
 prev.onclick = () => step(-1);
 if (Q.has('cam')) document.body.classList.add('camtool');   // 调镜头的工具只在 ?cam 时出现
@@ -486,16 +520,22 @@ const START = Q.get('shot') || 'A'; idx = Math.max(0, ITEMS.findIndex(it => it.s
 showItem(idx); toShot(START);
 if (document.fonts) document.fonts.ready.then(heatSoon); setTimeout(heatSoon, 1200);
 // 从上一张桌子飘过来的：先把镜头放在另一边，模型到了再飘进这一题的镜头；题目等镜头到了再出来
-{ let g = 0; try { g = +sessionStorage.getItem('tw_glide') || 0; sessionStorage.removeItem('tw_glide'); } catch (e) {}
+const PRE = TW_IN_FRAME ? +(Q.get('pre') || 0) : 0; let preWait = !!PRE, preFrames = 0;
+if (PRE) renderer.setPixelRatio(1), resize();   // 在底下等着的时候用低分辨率，省手机内存
+{ let g = PRE; if (!PRE) try { g = +sessionStorage.getItem('tw_glide') || 0; sessionStorage.removeItem('tw_glide'); } catch (e) {}
   if (g && !STILL) {
     const s0 = SHOTS[START]; col.classList.add('out'); controls.enabled = false; unlimit();
     const from = { target: new THREE.Vector3(...s0.target).sub(sideVec(s0.az, sideAmt() * g)), polar: s0.polar - GLIDE.polar, az: s0.az - GLIDE.az * g, zoom: s0.zoom * GLIDE.zoom };
     view.target.copy(from.target); view.polar = from.polar; view.az = from.az; view.zoom = from.zoom; applyView();
-    const go2 = () => { if (!window.__ready) return setTimeout(go2, 60);
-      camAnim = { t0: performance.now() + 120, dur: GLIDE.in, shot: START, glide: true, curve: 'out', from, to: { target: new THREE.Vector3(...s0.target), polar: s0.polar, az: s0.az, zoom: s0.zoom } };
-      setTimeout(() => { col.classList.remove('out'); heatSoon(); }, GLIDE.in - 300); };
-    go2();
-  } }
+    const go2 = (lag = 120) => { if (!window.__ready) return setTimeout(() => go2(lag), 60);
+      camAnim = { t0: performance.now() + lag, dur: GLIDE.in, shot: START, glide: true, curve: 'out', from, to: { target: new THREE.Vector3(...s0.target), polar: s0.polar, az: s0.az, zoom: s0.zoom } };
+      setTimeout(() => { col.classList.remove('out'); heatSoon(); }, GLIDE.in - 200); };
+    if (PRE) {
+      const rdy = () => { if (!window.__ready || preFrames < 3) return setTimeout(rdy, 80); parent.postMessage({ tw: 'ready' }, '*'); }; rdy();
+      addEventListener('message', e => { if (!e.data || e.data.tw !== 'arrive' || !preWait) return; preWait = false;
+        renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); resize(); go2(0); });
+    } else go2();
+  } else requestAnimationFrame(() => col.classList.remove('out')); }
 // （旧的换桌颜色过渡，已不用）
 if (document.documentElement.classList.contains('veiled')) setTimeout(() => { document.documentElement.classList.remove('veiled'); $('veil').style.transition = 'opacity 1.4s cubic-bezier(.4,0,.2,1)'; try { sessionStorage.removeItem('tw_veil'); } catch (e) {} }, 450);   // 字体到了再画一次（打开时就有答过的选项）
 if (REVIEW) {   // 回顾：把当时选的标出来，热痕照当时的分数；不能改
@@ -518,7 +558,10 @@ $('camSave').onclick = () => {
 };
 
 renderer.setAnimationLoop(t => {
+  if (preWait && window.__ready && preFrames > 3) return;
+  if (window.__ready) preFrames++;
   const now = performance.now();
+  if (Math.abs(ctWant - ctNow) > 0.0005) { ctNow += (ctWant - ctNow) * 0.06; frame(); }
   if (spreadAnim) { const k = Math.min(1, (now - spreadAnim.t0) / spreadAnim.dur); FU.spread.value.z = ease(k) * spreadAnim.reach;
     if (k >= 1) { spreadAnim = null; FU.spread.value.z = 1e5; setAB('A', cur); } }
   if (pulseAnim) { const k = Math.min(1, (now - pulseAnim.t0) / pulseAnim.dur); pulseAnim.m.uniforms.uPulse.value = Math.sin(Math.PI * k) * 1.4;

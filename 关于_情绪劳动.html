@@ -103,6 +103,16 @@ function split(el) {
   [...el.childNodes].forEach(wrap);
 }
 document.querySelectorAll('.big').forEach(split);
+// 装不下一屏就把大段字缩小一点，直到整块（大段话 + 细线 + 小字）正好放进这一屏，不挤、不叠、不被切
+function fit() {
+  const m = document.querySelector('main'), big = [...document.querySelectorAll('.big')].find(b => b.offsetParent);
+  if (!big) return; big.style.fontSize = '';
+  const room = () => innerHeight - (document.querySelector('header').offsetHeight || 0) - 24;
+  let fs = parseFloat(getComputedStyle(big).fontSize), n = 0;
+  const need = () => { const k = [...m.children].filter(c => c.offsetParent); return k[k.length - 1].getBoundingClientRect().bottom - k[0].getBoundingClientRect().top + parseFloat(getComputedStyle(m).paddingBottom); };
+  while (need() > room() && fs > 17 && n++ < 40) { fs -= 1; big.style.fontSize = fs + 'px'; }
+}
+fit(); addEventListener('resize', fit); if (document.fonts) document.fonts.ready.then(fit);
 // 进到眼前才冒出来（在滑动版里是滚到这一屏时）
 const go = () => requestAnimationFrame(() => requestAnimationFrame(() => document.body.classList.add('go')));
 (document.fonts ? document.fonts.ready : Promise.resolve()).then(() => {

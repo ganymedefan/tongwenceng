@@ -55,6 +55,12 @@ canvas#cnt { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 3;
 .lang-zh .meta dt { letter-spacing: .14em; }
 .lang-zh .meta dd b { font-weight: 380; }
 @media (max-width: 900px) { .info .big { font-size: 28px; margin: 3px 0 2px; } .info { width: 86vw; } .meta { font-size: 11.5px; margin-top: 14px; grid-template-columns: 3.6em 1fr; } .meta dt, .meta dd { padding: 6px 0; } .lede p { font-size: 16px; } }
+/* 说明框压到哪段字，那段字就化开（透明+糊），松手/移开再回来 */
+.lede { transition: opacity .45s ease, filter .55s ease; }
+.lede.melt { opacity: 0; filter: blur(7px); }
+#ls { display: none; }
+/* 手机：不要表格，只留标题、一句话和一行小字 */
+@media (max-width: 900px) { .meta { display: none; } #ls { display: block; } }
 @media (max-width: 900px) { .lede { width: auto; right: var(--pad); top: auto; bottom: var(--pad); transform: none; left: var(--pad); } .nav { gap: 14px; font-size: 13px; } }
 </style>
 </head>
@@ -64,7 +70,7 @@ canvas#cnt { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 3;
 <nav class="nav" id="nav"></nav>
 <div class="counts" id="counts"></div><canvas id="cnt"></canvas>
 <div class="info" id="info"></div>
-<div class="lede"><h1 id="h1"></h1><p id="lp"></p><dl class="meta" id="meta"></dl></div>
+<div class="lede" id="lede"><h1 id="h1"></h1><p id="lp"></p><small id="ls"></small><dl class="meta" id="meta"></dl></div>
 
 <script type="module">
 document.getElementById('nav').innerHTML = `<a href="./关于_情绪劳动.html">${L('关于', 'About')}</a><a class="on">${L('数据', 'Data')}</a><a href="./办公桌_新布景_轮廓.html">${L('问卷', 'Survey')}</a><a href="./热像镜子.html">${L('互动', 'Interact')}</a><a href="./其他_字的热弥散.html">${L('其他', 'Other')}</a>`;
@@ -101,6 +107,7 @@ const gauss = r => { let u = 0; while (!u) u = r(); return Math.sqrt(-2 * Math.l
     [L('发现', 'Findings'), L(`总平均 <b>${mean.toFixed(2)}</b><span>上级 ${byRel[0].toFixed(2)} · 同辈 ${byRel[1].toFixed(2)} · 亲近 ${byRel[2].toFixed(2)}</span><span>最高：${nm(hi)} ${hi.mean.toFixed(2)}</span><span>最低：${nm(lo)} ${lo.mean.toFixed(2)}</span><span>有调整的回答里，${Math.round(deep * 100)}% 连感受也变了</span>`,
       `Overall mean <b>${mean.toFixed(2)}</b><span>Supervisor ${byRel[0].toFixed(2)} · Peer ${byRel[1].toFixed(2)} · Close ${byRel[2].toFixed(2)}</span><span>Highest: ${nm(hi)} ${hi.mean.toFixed(2)}</span><span>Lowest: ${nm(lo)} ${lo.mean.toFixed(2)}</span><span>Where something was adjusted, ${Math.round(deep * 100)}% changed the feeling too</span>`)],
   ];
+  document.getElementById('ls').textContent = L(`${DATA.length} 份答卷，${all.length} 个回答。一根枝丫是一个时刻，越往外，调整得越多。按住图看每一根。`, `${DATA.length} respondents, ${all.length} answers. Each branch is one moment; further out means more adjusted. Press and hold to read one.`);
   document.getElementById('meta').innerHTML = rows.map(([t, d]) => `<dt>${t}</dt><dd>${d}</dd>`).join(''); }
 const pts = [];
 DATA.forEach(p => ARMS.forEach((cell, k) => { const c = p.cells[cell]; if (c.score == null) return; const r = seeded(p.no * 131 + k * 17);
@@ -237,11 +244,11 @@ function showCounts(k) {
 }
 let hov = -1;
 const onPoint = e => {
-  const k = armAt(e.clientX, e.clientY);
+  const k = e.clientX < 0 ? -1 : armAt(e.clientX, e.clientY);
   if (k === hov) return; hov = k;
   if (k >= 0 && k !== cur) { if (cur >= 0 && A > 0.05) { prev = cur; B = A; } cur = k; A = 0; upload(); }
   [...countsEl.children].forEach(el => el.classList.toggle('on', +el.dataset.k === k)); showCounts(k);
-  if (k < 0) { info.classList.remove('on'); return; }
+  if (k < 0) { info.classList.remove('on'); lede.classList.remove('melt'); return; }
   const a = arms[k], ang = -Math.PI / 2 + k * (Math.PI * 2 / 9), lr = geo.R * 1.24, x = geo.CX + Math.cos(ang) * lr, y = geo.CY + Math.sin(ang) * lr, c = Math.cos(ang);
   info.innerHTML = `<b>${REL[a.cell[1]]}</b><small>${EVT[a.cell[0]]}</small><div class="big">${a.mean.toFixed(2)}</div><small>${L('平均（0–4）', 'mean (0–4)')} · ${a.n} ${L('人', 'answers')} · ${L('感受也变了', 'feeling changed')} ${Math.round(a.deep * 100)}%</small>`;
   info.style.left = x + 'px'; info.style.top = y + 'px';
@@ -254,7 +261,11 @@ const onPoint = e => {
   const r = info.getBoundingClientRect(), m = 16;                       // 别出屏幕
   if (r.right > innerWidth - m) info.style.left = (x - (r.right - innerWidth + m)) + 'px';
   if (r.left < m) info.style.left = (x + (m - r.left)) + 'px';
+  { const a = info.getBoundingClientRect(), b = lede.getBoundingClientRect(), g = 12;   // 说明框压着那段字：字化开
+    lede.classList.toggle('melt', a.left < b.right + g && a.right > b.left - g && a.top < b.bottom + g && a.bottom > b.top - g); }
 };
+const lede = document.getElementById('lede');
+let relT = 0;
 addEventListener('pointermove', e => { if (e.pointerType === 'mouse') onPoint(e); });
 addEventListener('pointerdown', onPoint);                               // 手机上点一下也算
 addEventListener('touchstart', e => { const t = e.touches[0]; if (t) onPoint({ clientX: t.clientX, clientY: t.clientY }); }, { passive: true });
@@ -264,7 +275,7 @@ let chartTouch = false;
 const inChart = (x, y) => Math.hypot(x - geo.CX, y - geo.CY) < geo.R * 1.3;
 document.addEventListener('touchstart', e => { const t = e.touches[0]; chartTouch = !!t && inChart(t.clientX, t.clientY); if (chartTouch) { e.stopPropagation(); onPoint({ clientX: t.clientX, clientY: t.clientY }); } }, { capture: true, passive: true });
 document.addEventListener('touchmove', e => { if (!chartTouch) return; const t = e.touches[0]; if (e.cancelable) e.preventDefault(); e.stopPropagation(); onPoint({ clientX: t.clientX, clientY: t.clientY }); }, { capture: true, passive: false });
-document.addEventListener('touchend', e => { if (chartTouch) e.stopPropagation(); chartTouch = false; }, { capture: true, passive: true });
+document.addEventListener('touchend', e => { if (chartTouch) { e.stopPropagation(); clearTimeout(relT); relT = setTimeout(() => { if (!chartTouch) onPoint({ clientX: -9999, clientY: -9999 }); }, 900); } chartTouch = false; }, { capture: true, passive: true });   // 松手一会儿：恢复原样
 
 const t0 = performance.now();
 (function frame() {

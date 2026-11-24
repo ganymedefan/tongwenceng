@@ -14,3 +14,6 @@ img { -webkit-user-drag: none; }
 
 /* 在滑动站里（外层有统一的顶部导航）：各页自己的 logo 和导航不再重复出现 */
 html.inframe body > header, html.inframe a.logo, html.inframe nav#nav, html.inframe a.mark { display: none !important; }
+
+/* iPhone 的 Safari 会自作主张把框里（iframe）的字放大，字就挤、行就叠：关掉，字号按我们写的来 */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }

@@ -66,7 +66,7 @@ body { font-family: "Exposure", Georgia, serif; color: #1b181d; -webkit-font-smo
   <section class="sec later"><iframe data-src="./热像镜子.html" title="Interact" allow="camera"></iframe></section>
 </div>
 <header id="bar"><a class="lg" data-i="0"><img id="lgImg" src="./logo/logo_彩虹.png" alt="In the Stratospheric Realm"></a>
-  <nav><a data-i="1"></a><a data-i="2"></a><a data-i="3"></a><a data-i="4"></a><a class="lang" id="langA"></a></nav></header>
+  <nav><a data-i="1"></a><a data-i="2"></a><a data-i="3"></a><a data-i="4"></a></nav></header>
 <div id="wash"></div>
 <div id="pband"></div><div class="pull" id="pull"><span class="arr">↓</span><span id="pt"></span><span class="bar"><i id="pb"></i></span></div>
 
@@ -79,7 +79,7 @@ function washTo(i) { if (i === washI) return; washI = i; const n = SEAM[i], c = 
 // ───── 顶部导航 ─────
 const bar = document.getElementById('bar'), barLinks = [...bar.querySelectorAll('[data-i]')];
 [L('关于', 'About'), L('数据', 'Data'), L('问卷', 'Survey'), L('互动', 'Interact')].forEach((t, i) => { bar.querySelectorAll('nav [data-i]')[i].textContent = t; });
-{ const la = document.getElementById('langA'); la.textContent = TW_LANG === 'en' ? '中文' : 'English'; la.onclick = () => { try { localStorage.setItem('tw_lang', TW_LANG === 'en' ? 'zh' : 'en'); } catch (e) {} location.reload(); }; }
+// 中英切换只在首页那一屏（首页自己有），导航里不再放第二个
 let barSeen = -1e9, barHover = false;
 const poke = () => { barSeen = performance.now(); };
 barLinks.forEach(a => a.onclick = () => { const i = +a.dataset.i, f = i === 3 ? svA : secs[i].querySelector('iframe'); if (!f.getAttribute('src')) f.src = f.dataset.src; if (i >= 3) armed = false; goTo(secs[i].offsetTop); poke(); });
@@ -95,10 +95,25 @@ const wrap = document.getElementById('wrap'), pull = document.getElementById('pu
 // 到了附近才加载
 const frames = [...document.querySelectorAll('iframe[data-src]')];
 // 每次发布换一个版本号：各页地址带上它，手机就不会继续用缓存里的旧页面
-const BUILD = '20261124a'; frames.forEach(f => { f.dataset.src += (f.dataset.src.includes('?') ? '&' : '?') + 'v=' + BUILD; });
+const BUILD = '20261124b'; frames.forEach(f => { f.dataset.src += (f.dataset.src.includes('?') ? '&' : '?') + 'v=' + BUILD; });
 const secs = [...document.querySelectorAll('#wrap > section')];
-const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting && !e.target.src) e.target.src = e.target.dataset.src; }), { rootMargin: '60% 0px' });
-frames.forEach(f => io.observe(f));
+// 只开着眼前这一屏和上下相邻的；隔两屏以上的先卸掉，回来再开（iPhone 同时开太多 3D 画面会把正在看的那一页的画面弄没）
+// 问卷那一屏卸掉前记住答到哪张桌子、哪一题，回来接着
+const live = f => { const s = f.getAttribute('src'); return !!s && s !== 'about:blank'; };
+let svWhere = '';
+function manage() {
+  const H = innerHeight, near = new Set();
+  [cur, tgt].forEach(y => { const c = Math.round(y / H); [c - 1, c, c + 1].forEach(i => near.add(i)); });
+  secs.forEach((sec, i) => {
+    const f = i === 3 ? svA : sec.querySelector('iframe');
+    if (near.has(i)) { if (!live(f)) f.src = i === 3 && svWhere ? withV(svWhere) : f.dataset.src; }
+    else if (live(f) && !(i === 3 && swingWant)) {
+      if (i === 3) { const pg = pageOf(f); if (pg && MAP[base(pg)] === 3) svWhere = './' + pg.replace(/([?&])(pre|v)=[^&]*/g, '$1').replace(/[?&]+$/, ''); if (svB && live(svB)) { svB.src = 'about:blank'; svBHref = ''; svBReady = false; } }
+      f.src = 'about:blank';
+    }
+  });
+}
+setInterval(manage, 500);
 // 某一屏真的翻到眼前了（露出六成以上）：告诉那一页（热像镜子要等这时才请求相机）
 const seen = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting && e.target.contentWindow) e.target.contentWindow.postMessage({ tw: 'shown' }, '*'); }), { threshold: 0.6 });
 frames.forEach(f => { seen.observe(f); f.addEventListener('load', () => { const r = f.getBoundingClientRect(); if (r.top < innerHeight * 0.4 && r.bottom > innerHeight * 0.6) f.contentWindow.postMessage({ tw: 'shown' }, '*'); }); });
@@ -201,6 +216,7 @@ frames.forEach(hook);
 // ───── 换桌子：摇臂甩过去 ─────
 // 正在答的桌子（svA）一开始答题，就让外层在它底下备好下一张（svB，低分辨率、几乎不画）。
 // 点"下一张桌子"：svA 慢慢起、越甩越快地横着甩出去；甩到最快那一下，svB 淡上来、接着同一个速度甩进来、慢慢停稳。
+const TOUCH = matchMedia('(pointer: coarse)').matches || innerWidth < 760;
 const svSec = secs[3]; let svA = svSec.querySelector('iframe'), svB = null, svBHref = '', svBReady = false, swingWant = null;
 const withV = h => h + (h.includes('?') ? '&' : '?') + 'v=' + BUILD;
 function preload(href) {
@@ -219,7 +235,8 @@ function swing() {
 }
 addEventListener('message', e => {
   const m = e.data; if (!m || !m.tw) return;
-  if (m.tw === 'pre' && e.source === svA.contentWindow) preload(m.href);
+  if (m.tw === 'pre' && e.source === svA.contentWindow && !TOUCH) preload(m.href);   // 手机不提前备：换桌那一下再开
+  if (m.tw === 'where' && (e.source === svA.contentWindow || (svB && e.source === svB.contentWindow))) svWhere = m.href;
   if (m.tw === 'swing' && e.source === svA.contentWindow) { swingWant = m; preload(m.href); if (svBReady) swing(); }
   if (m.tw === 'ready' && svB && e.source === svB.contentWindow) { svBReady = true; if (swingWant) swing(); }
 });

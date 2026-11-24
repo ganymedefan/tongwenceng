@@ -453,8 +453,16 @@ function showItem(i) {
     setTimeout(() => go(mine.score == null ? GRAY : heatState(mine.score, mine.score ? depth : 0.5), 1600), 50);
   }
   fitCol();
-  heatSoon();
+  heatSoon(); tellWhere();
 }
+// 告诉外层答到哪一题：问卷那一屏被卸掉（翻远了）再回来时，接着这一题
+function tellWhere() { if (TW_IN_FRAME && !(Q.get('pre') && !window.__arrived)) parent.postMessage({ tw: 'where', href: `./${PAGE}?shot=${ITEMS[idx].shot}` }, '*'); }
+// 手机内存紧时浏览器会把这一页的 3D 画面丢掉（模型全没了）：发现丢了就在这一题重新打开
+renderer.domElement.addEventListener('webglcontextlost', e => { e.preventDefault(); lostGL = true; });
+let lostGL = false;
+const reopen = () => { if ((lostGL || renderer.getContext().isContextLost()) && !preWait && document.visibilityState === 'visible') location.replace(`./${PAGE}?shot=${ITEMS[idx].shot}`); };
+addEventListener('message', e => { if (e.data && e.data.tw === 'shown') reopen(); });
+setInterval(reopen, 1500);
 function fitCol() {
   if (!document.body.classList.contains('stack')) return;
   const pk = front.classList.contains('picked'), bo = back.classList.contains('on'), st = col.style.cssText;
@@ -533,7 +541,7 @@ if (PRE) renderer.setPixelRatio(1), resize();   // 在底下等着的时候用�
     if (PRE) {
       const rdy = () => { if (!window.__ready || preFrames < 3) return setTimeout(rdy, 80); parent.postMessage({ tw: 'ready' }, '*'); }; rdy();
       addEventListener('message', e => { if (!e.data || e.data.tw !== 'arrive' || !preWait) return; preWait = false;
-        renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); resize(); go2(0); });
+        window.__arrived = true; renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); resize(); go2(0); tellWhere(); });
     } else go2();
   } else requestAnimationFrame(() => col.classList.remove('out')); }
 // （旧的换桌颜色过渡，已不用）

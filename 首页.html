@@ -55,6 +55,8 @@ canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block;
 .col .ti .tt { display: inline-block; position: relative; }
 .col .ti .arr { color: var(--ink); display: inline-block; margin-left: .18em; opacity: 0; transform: translateX(-.25em); transition: opacity .45s, transform .6s cubic-bezier(.2,.75,.2,1); font-weight: 300; }
 .col.armed .ti .arr { opacity: 1; transform: none; }
+/* 箭头画进标题那层"字的热弥散"里（同一张画布，跟字一起晕），这里原来那个字形箭头不再显示 */
+.col .ti .arr { visibility: hidden; }
 
 .col .ln { position: absolute; left: var(--pad); right: var(--pad); bottom: var(--pad); font-size: clamp(15px, 1.25vw, 19px); line-height: 1.35; max-width: 26em;
   opacity: 0; transform: translateY(10px); transition: opacity .5s, transform .8s cubic-bezier(.2,.75,.2,1); }
@@ -204,7 +206,7 @@ requestAnimationFrame(frame);
 requestAnimationFrame(() => requestAnimationFrame(() => document.getElementById('logo').classList.add('ready')));
 // 浮出的大标题：字的热弥散（全站只在这里用一次），颜色跟着当前色卡
 const titleFx = [];
-Promise.all(cols.map((c, i) => heatTitle(c.querySelector('.tt'), PALS[target], { text: ZONES[i].name }))).then(a => titleFx.push(...a.filter(Boolean)));
+Promise.all(cols.map((c, i) => heatTitle(c.querySelector('.tt'), PALS[target], { text: ZONES[i].name + (ZONES[i].href ? ' →' : '') }))).then(a => titleFx.push(...a.filter(Boolean)));
 let fxStage = target;
 </script>
 </body>

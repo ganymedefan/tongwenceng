@@ -107,7 +107,7 @@ const gauss = r => { let u = 0; while (!u) u = r(); return Math.sqrt(-2 * Math.l
     [L('发现', 'Findings'), L(`总平均 <b>${mean.toFixed(2)}</b><span>上级 ${byRel[0].toFixed(2)} · 同辈 ${byRel[1].toFixed(2)} · 亲近 ${byRel[2].toFixed(2)}</span><span>最高：${nm(hi)} ${hi.mean.toFixed(2)}</span><span>最低：${nm(lo)} ${lo.mean.toFixed(2)}</span><span>有调整的回答里，${Math.round(deep * 100)}% 连感受也变了</span>`,
       `Overall mean <b>${mean.toFixed(2)}</b><span>Supervisor ${byRel[0].toFixed(2)} · Peer ${byRel[1].toFixed(2)} · Close ${byRel[2].toFixed(2)}</span><span>Highest: ${nm(hi)} ${hi.mean.toFixed(2)}</span><span>Lowest: ${nm(lo)} ${lo.mean.toFixed(2)}</span><span>Where something was adjusted, ${Math.round(deep * 100)}% changed the feeling too</span>`)],
   ];
-  document.getElementById('ls').textContent = L(`${DATA.length} 份答卷，${all.length} 个回答。一根枝丫是一个时刻，越往外，调整得越多。按住图看每一根。`, `${DATA.length} respondents, ${all.length} answers. Each branch is one moment; further out means more adjusted. Press and hold to read one.`);
+  document.getElementById('ls').textContent = L(`${DATA.length} 份答卷，${all.length} 个回答。一根枝丫是一个时刻，越往外，调整得越多。点一根枝丫看这一题。`, `${DATA.length} respondents, ${all.length} answers. Each branch is one moment; further out means more adjusted. Tap a branch to read it.`);
   document.getElementById('meta').innerHTML = rows.map(([t, d]) => `<dt>${t}</dt><dd>${d}</dd>`).join(''); }
 const pts = [];
 DATA.forEach(p => ARMS.forEach((cell, k) => { const c = p.cells[cell]; if (c.score == null) return; const r = seeded(p.no * 131 + k * 17);
@@ -134,7 +134,7 @@ gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, `precision highp float; varying vec2 
     // 移上去的那根枝丫自己的热场（R=现在这根，G=刚离开、正在退的那根）：只有它自己的形状有反应
     vec2 hn = texture2D(uHN, uv).rg, hf = texture2D(uHF, uv).rg;
     vec2 own = (hn*1.7 + hf*1.5) * uIn * (1.0 + wob*0.25);
-    float gA = uA * smoothstep(th - 0.03, th + 0.12, own.x), gB = uB * smoothstep(th - 0.03, th + 0.12, own.y);
+    float gA = uA * smoothstep(th * 0.12, th * 0.45, own.x), gB = uB * smoothstep(th * 0.12, th * 0.45, own.y);   // 门槛放低：这根枝丫整片都上色，里面不留灰
     float gx = max(uA * smoothstep(th*0.35, th, own.x), uB * smoothstep(th*0.35, th, own.y));   // 膨胀的范围（比形状略大）
     float g = max(gA, gB);
     float tot = (dd.r + dd.g + dd.b) * uIn * (1.0 + 0.35*gx);          // 移上去：膨胀
@@ -144,8 +144,8 @@ gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, `precision highp float; varying vec2 
     vec3 gray = mix(vec3(0.905, 0.9, 0.905), vec3(0.78, 0.77, 0.79), pow(depth, 0.7));
     vec3 w = dd / max(dd.r + dd.g + dd.b, 1e-4);
     float xr = 0.08 + 0.9 * pow(depth, 0.7);
-    float xa = 0.08 + 0.9 * pow(clamp((own.x*(1.0+0.35*gx) - th) / 1.1, 0.0, 1.0), 0.7);
-    float xb = 0.08 + 0.9 * pow(clamp((own.y*(1.0+0.35*gx) - th) / 1.1, 0.0, 1.0), 0.7);
+    float xa = 0.18 + 0.8 * pow(clamp((own.x*(1.0+0.35*gx) - th * 0.3) / 1.3, 0.0, 1.0), 0.7);
+    float xb = 0.18 + 0.8 * pow(clamp((own.y*(1.0+0.35*gx) - th * 0.3) / 1.3, 0.0, 1.0), 0.7);
     vec3 col = mix(mix(gray, texture2D(uR, vec2(xb, uSB)).rgb, gB), texture2D(uR, vec2(xa, uSA)).rgb, gA);
     vec3 cold = mix(texture2D(uR, vec2(0.0, uSB)).rgb, texture2D(uR, vec2(0.0, uSA)).rgb, uA / max(uA + uB, 1e-4));
     float gh = max(uA * smoothstep(th*0.25, th*0.8, own.x), uB * smoothstep(th*0.25, th*0.8, own.y));
@@ -275,7 +275,7 @@ let chartTouch = false;
 const inChart = (x, y) => Math.hypot(x - geo.CX, y - geo.CY) < geo.R * 1.3;
 document.addEventListener('touchstart', e => { const t = e.touches[0]; chartTouch = !!t && inChart(t.clientX, t.clientY); if (chartTouch) { e.stopPropagation(); onPoint({ clientX: t.clientX, clientY: t.clientY }); } }, { capture: true, passive: true });
 document.addEventListener('touchmove', e => { if (!chartTouch) return; const t = e.touches[0]; if (e.cancelable) e.preventDefault(); e.stopPropagation(); onPoint({ clientX: t.clientX, clientY: t.clientY }); }, { capture: true, passive: false });
-document.addEventListener('touchend', e => { if (chartTouch) { e.stopPropagation(); clearTimeout(relT); relT = setTimeout(() => { if (!chartTouch) onPoint({ clientX: -9999, clientY: -9999 }); }, 900); } chartTouch = false; }, { capture: true, passive: true });   // 松手一会儿：恢复原样
+document.addEventListener('touchend', e => { if (chartTouch) e.stopPropagation(); chartTouch = false; }, { capture: true, passive: true });   // 松手不恢复：点图外面别处才恢复
 
 const t0 = performance.now();
 (function frame() {

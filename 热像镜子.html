@@ -184,7 +184,7 @@ const passSmall = new FullScreenQuad(new THREE.ShaderMaterial({
       for(int i=0;i<4;i++) for(int j=0;j<4;j++){                         // 一格里取 16 个点平均，把原画面的网点、噪点抹平
         vec2 uv = vUv + (vec2(float(i),float(j))/3.0-0.5)*uFoot; uv.x = 1.0-uv.x;   // 镜子
         float r = uAspect/uSrcAspect; if(r>1.0) uv.y = 0.5+(uv.y-0.5)/r; else uv.x = 0.5+(uv.x-0.5)*r;   // 铺满
-        acc += dot(texture2D(uSrc, uv).rgb, vec3(0.3,0.59,0.11));
+        vec3 sc = texture2D(uSrc, uv).rgb; acc += max(sc.r, max(sc.g, sc.b));   // 照映射工具 20.4：取 r/g/b 里最亮的那个
         msk += uHasMask > 0.5 ? texture2D(uMask, vec2(uv.x, 1.0-uv.y)).r : 1.0; }   // 人像分割：人 = 1，背景 = 0
       gl_FragColor = vec4(acc/16.0, msk/16.0, 0.0, 1.0); }` }));
 // 第二步：热的余温——动过的地方留一会儿热（Brik 的"动的地方更亮"）
@@ -198,13 +198,13 @@ const passHeat = new FullScreenQuad(new THREE.ShaderMaterial({
 // 第三步：上色 + 颗粒
 const U = {
   uLum: { value: null }, uHeat: { value: null }, uRamp: { value: ramp }, uRes: { value: new THREE.Vector2() }, uT: { value: 0 },
-  uGrain: { value: 0.5 }, uLo: { value: 0.06 }, uHi: { value: 0.78 }, uSpeed: { value: 1.4 }, uEdge: { value: 0.3 }, uOpen: { value: 0 }, uTiny: { value: null }, uTinyTexel: { value: new THREE.Vector2(1 / 32, 1 / 18) }, uTexel: { value: new THREE.Vector2() }, uMotion: { value: 0.35 },
+  uGrain: { value: 0.5 }, uLo: { value: 0.09 }, uHi: { value: 0.95 }, uMid: { value: 1 }, uSpeed: { value: 1.4 }, uEdge: { value: 0.3 }, uOpen: { value: 0 }, uTiny: { value: null }, uTinyTexel: { value: new THREE.Vector2(1 / 32, 1 / 18) }, uTexel: { value: new THREE.Vector2() }, uMotion: { value: 0.35 },
 };
 const passColor = new FullScreenQuad(new THREE.ShaderMaterial({
   uniforms: U,
   vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec4(position.xy,0.,1.); }`,
   fragmentShader: /* glsl */`
-    uniform sampler2D uLum, uHeat, uRamp, uTiny; uniform vec2 uTinyTexel; uniform vec2 uRes, uTexel; uniform float uT, uGrain, uSpeed, uEdge, uMotion, uLo, uHi, uOpen;
+    uniform sampler2D uLum, uHeat, uRamp, uTiny; uniform vec2 uTinyTexel; uniform vec2 uRes, uTexel; uniform float uT, uGrain, uSpeed, uEdge, uMotion, uLo, uHi, uOpen, uMid;
     varying vec2 vUv;
     float h2(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
     float blur(sampler2D t, vec2 uv, float r){       // 9 点柔化，r 是格数
@@ -226,7 +226,7 @@ const passColor = new FullScreenQuad(new THREE.ShaderMaterial({
       person = smoothstep(0.15, 0.85, person/pw);
       lum = mix(lum, far.r, closed); person = mix(person, smoothstep(0.05, 0.9, far.g), closed);   // 没点进去：人和背景都糊成一片
       float heat = blur(uHeat, vUv, 2.0 + uEdge*3.0);
-      float v = smoothstep(uLo, uHi, lum);           // 亮度 → 0..1（和 OpenProcessing 那个一样按亮度走）
+      float v = pow(clamp((lum - uLo) / max(uHi - uLo, 0.02), 0.0, 1.0), 1.0 / uMid);   // 照映射工具：按这一帧自己的明暗拉满（1%–99%），再上色
       v = clamp(v + heat*uMotion*uOpen, 0.0, 1.0);     // 动的地方再热一点（点进去以后才有）
       v = mix(v*0.42, v, person);                      // 景还在，只是冷下去；人最热
       // 颗粒：分数越高越多、越快；颗粒抖的是"取哪一档颜色"，所以档与档之间是颗粒过渡
@@ -244,7 +244,10 @@ const passCopy = new FullScreenQuad(new THREE.ShaderMaterial({ uniforms: { uT: {
 function sizeRTs() {
   const pw = Math.floor(innerWidth * DPR), ph = Math.floor(innerHeight * DPR);
   renderer.setSize(innerWidth, innerHeight, false); U.uRes.value.set(pw, ph);
-  const w = Math.max(32, Math.round(pw / scale)), h = Math.max(24, Math.round(ph / scale));
+  let w = Math.max(32, Math.round(pw / scale)), h = Math.max(24, Math.round(ph / scale));
+  { const minShort = Math.round(lerp(100, 70, U.uEdge.value)), sh = Math.min(w, h);   // 手机竖屏：按格子算太粗、脸看不清，短边至少这么多格
+    if (sh < minShort) { const k = minShort / sh; w = Math.round(w * k); h = Math.round(h * k); } }
+  if (rtTiny.width > rtTiny.height !== pw > ph) rtTiny.setSize(rtTiny.height, rtTiny.width); U.uTinyTexel.value.set(1 / rtTiny.width, 1 / rtTiny.height);
   [rtS, rtH[0], rtH[1]].forEach(r => r && r.dispose());
   rtS = mkRT(w, h); rtH = [mkRT(w, h), mkRT(w, h)];
   U.uTexel.value.set(1 / w, 1 / h);
@@ -252,10 +255,11 @@ function sizeRTs() {
   passSmall.material.uniforms.uAspect.value = pw / ph;
 }
 
+let lastSt = 0, stLo = 0.09, stHi = 0.95, stBuf = null, curPlanId = 'mid';
 // ───── 把数据变成参数 ─────
 const num = document.getElementById('num'), tx = {};
 function apply() {
-  const s = data.s, d = data.d, u = s / 4, P = overallPlan(s);
+  const s = data.s, d = data.d, u = s / 4, P = overallPlan(s); curPlanId = P.id;
   const a = ramp.image.data; P.colors.forEach((c, i) => { a[i * 4] = c[0]; a[i * 4 + 1] = c[1]; a[i * 4 + 2] = c[2]; a[i * 4 + 3] = 255; }); ramp.needsUpdate = true;
   U.uGrain.value = lerp(RULE.grain.amount[0], RULE.grain.amount[1], u);
   U.uSpeed.value = lerp(RULE.grain.speed[0], RULE.grain.speed[1], u);
@@ -357,7 +361,11 @@ function drawOverlay(now) {
 // ───── 先模糊，点进去再具体（参考 v0.7 lab-unbox）─────
 let open = 0, openGoal = Q.has('open') ? 1 : 0;
 const numEl = document.getElementById('num');
-addEventListener('click', e => { if (LOCKED || e.target.closest('.mine, .review, .lock')) return; openGoal = openGoal ? 0 : 1; });
+addEventListener('click', e => { if (LOCKED || e.target.closest('.mine, .review, .lock')) return; openGoal = openGoal ? 0 : 1; autoOpen = false; });
+// 手机上不一定知道要点：翻到这一屏两秒多以后自己慢慢变清楚（先糊后清）
+let autoOpen = innerWidth < 760 || matchMedia('(pointer: coarse)').matches;
+const openSoon = () => { if (autoOpen && !LOCKED) setTimeout(() => { if (autoOpen) openGoal = 1; }, 2200); };
+if (!window.TW_IN_FRAME) openSoon(); else addEventListener('message', e => { if (e.data && e.data.tw === 'shown') openSoon(); });
 document.body.style.cursor = 'pointer';
 
 // ───── 上锁 / 回顾 / 重新答题 ─────
@@ -418,6 +426,19 @@ if (LOCKED) {
   document.getElementById('redo').onclick = () => { if (confirm(L('清空这九个回答，重新开始？', 'Clear these nine answers and start again?'))) { TW_reset(); location.href = './办公桌_新布景_轮廓.html'; } };
 }
 
+// 映射工具的"人自身明暗拉满"：亮度 ≥ 6% 的像素取 1% / 99% 分位。镜子每 0.4 秒从缩小图上量一次，慢慢跟过去
+const REF = { lo: 23 / 255, hi: 241 / 255 };
+function stretchNow() {
+  const w = rtS.width, h = rtS.height; if (!stBuf || stBuf.length !== w * h * 4) stBuf = new Uint8Array(w * h * 4);
+  try { renderer.readRenderTargetPixels(rtS, 0, 0, w, h, stBuf); } catch (e) { return; }
+  const v = []; for (let i = 0; i < stBuf.length; i += 4) if (stBuf[i] >= 15) v.push(stBuf[i]);
+  if (v.length < 50) return; v.sort((a, b) => a - b);
+  let lo = v[Math.floor(v.length * 0.01)] / 255, hi = v[Math.floor(v.length * 0.99)] / 255;
+  if (hi - lo < 0.15) hi = Math.min(1, lo + 0.15);
+  if (curPlanId === 'back') {   // 后台不拉满：45/240 按这一帧的明暗等比换算，中间调 0.85
+    const rel = x => lo + (x / 255 - REF.lo) / (REF.hi - REF.lo) * (hi - lo); stLo = rel(45); stHi = rel(240); U.uMid.value = 0.85;
+  } else { stLo = lo; stHi = hi; U.uMid.value = 1; }
+}
 const clock = new THREE.Clock();
 function frame() {
   const t = clock.getElapsedTime();
@@ -430,7 +451,8 @@ function frame() {
   passHeat.material.uniforms.uNow.value = rtS.texture; passHeat.material.uniforms.uPrev.value = a.texture;
   renderer.setRenderTarget(b); passHeat.render(renderer); hi = 1 - hi;
   renderer.setRenderTarget(null);
-  U.uLo.value = 0.08; U.uHi.value = 0.82;
+  if (performance.now() - lastSt > 400) { lastSt = performance.now(); stretchNow(); }
+  U.uLo.value += (stLo - U.uLo.value) * 0.08; U.uHi.value += (stHi - U.uHi.value) * 0.08;
   open += (openGoal - open) * 0.035; const eo = open * open * (3 - 2 * open);
   U.uOpen.value = eo; numEl.style.opacity = Math.max(0, (eo - 0.55) / 0.45).toFixed(3);
   U.uLum.value = rtS.texture; U.uHeat.value = b.texture; U.uT.value = t;
